@@ -1,7 +1,9 @@
 package com.travel.common;
 
 import cn.dev33.satoken.stp.StpUtil;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
@@ -12,8 +14,10 @@ public class UserContext {
 
     private  static final ThreadLocal<LoginUser> USER_HOLDER = new ThreadLocal<>();
 
-    @Getter 
-    @Setter 
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class LoginUser{
         private Long userId;
         private String username;

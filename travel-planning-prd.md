@@ -621,6 +621,7 @@
 | 应用 | AI 框架 | Spring AI Alibaba | Graph 多步工作流 + Agent 框架,契合对话式协同 |
 | 应用 | AI 编排 | Spring AI Alibaba Graph | 攻略生成工作流编排(FR-3) |
 | 应用 | 持久 | MyBatis-Plus | 多租户、动态 SQL、代码生成 |
+| 应用 | API 文档 | springdoc-openapi (Swagger UI) | 由注解自动生成 OpenAPI,提供可视化调试入口,契约与实现同源(§7.10) |
 | 应用 | 任务调度 | XXL-Job | 出行前提醒、出行期数据监控定时任务(FR-10) |
 | 应用 | 消息 | RocketMQ | 异步事件(攻略生成完成、调整建议推送) |
 | 应用 | HTTP 客户端 | OkHttp / WebClient | 调用 AI 模型与实时数据 API |
@@ -754,6 +755,35 @@ P2 自营预订演进时,架构改动控制在执行域,其他层不动:
 | 部署 | 不动 | + 支付安全合规配置 |
 
 演进时攻略生成工作流、对话引擎、画像迭代、知识库全部不动,改动集中在执行域与数据层,降低演进风险。
+
+### 7.10 接口文档与可视化调试(Swagger / OpenAPI)
+
+**目标**:让 `travel-planning-api.md` 定义的接口契约与代码实现保持同一事实来源,并提供浏览器内可直接调用的调试入口,降低前后端联调与验收成本。
+
+**选型**:`springdoc-openapi-starter-webmvc-ui`(2.6.x)。对 Spring Boot 3 原生支持,**零侵入**——仅靠 Controller 注解自动扫描生成 OpenAPI 3 文档,无需手工维护 YAML,也无需在 yml 中额外配置。
+
+**接入要点**:
+
+| 项 | 说明 |
+|---|---|
+| 访问地址 | `/swagger-ui/index.html`(UI)、`/v3/api-docs`(OpenAPI JSON) |
+| 全局信息 | 标题、版本、统一响应体约定(`{code,message,requestId,data}`,成功 `code=0`)与鉴权说明 |
+| 鉴权 | 配置 `BearerAuth`(HTTP Bearer)安全方案 + 全局安全要求;右上角 **Authorize** 粘贴 token 即可调试所有受保护接口 |
+| 分组 | 按业务域打 `@Tag`:鉴权 / 用户画像 / 对话会话 |
+| 公开接口 | 登录、注册、验证码标 `@SecurityRequirements`(空),UI 上不显示鉴权锁 |
+| 白名单 | `/swagger-ui/**`、`/v3/api-docs/**` 加入 Sa-Token 放行路径,免登录访问 |
+
+**受保护接口调试流程**:
+
+1. 调 `POST /api/auth/login` 获取 `data.token`;
+2. 点右上 **Authorize**,粘贴 token 本身(**无需** `Bearer ` 前缀,安全方案已声明 bearer,框架自动补前缀);
+3. 直接对目标接口 Try it out。
+
+**边界与注意事项**:
+
+- Sa-Token 会话当前存内存,**服务重启后 token 失效**,需重新登录取 token(后续接 Redis 持久化后消除)。
+- WebSocket 流式推送(`/api/ws/chat/{sessionId}`)不在 Swagger 覆盖范围内,需用 `wscat` 或前端页面单独验证。
+- Swagger 面向 dev/联调环境;prod 应关闭或加访问控制(`springdoc.api-docs.enabled=false`)。
 
 ---
 

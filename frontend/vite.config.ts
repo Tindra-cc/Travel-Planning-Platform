@@ -13,10 +13,11 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // 后端接口代理，转发到springboot默认8080端口
+      // 后端接口代理，转发到springboot默认8080端口（ws:true 支持 /api/ws 的 WebSocket）
       '/api': {
         target: 'http://localhost:8080',
         changeOrigin: true,
+        ws: true,
       }
     }
   }
