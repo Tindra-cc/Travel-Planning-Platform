@@ -1,12 +1,14 @@
 package com.travel.modules.guide.controller;
 
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.travel.common.PageResult;
 import com.travel.common.Result;
+import com.travel.modules.guide.dto.GuidePostDetail;
 import com.travel.modules.guide.dto.GuidePostItem;
 import com.travel.modules.guide.service.GuideService;
 
@@ -28,5 +30,11 @@ public class GuideController {
             @RequestParam(defaultValue = "1") long page,
             @RequestParam(defaultValue = "12") long pageSize) {
         return Result.success(guideService.recommend(page, pageSize));
+    }
+
+    @Operation(summary = "攻略详情", description = "多图 + 模块化规划 + 原文外链；不存在或已下架返回 40400")
+    @GetMapping("/{postId}")
+    public Result<GuidePostDetail> detail(@PathVariable long postId) {
+        return Result.success(guideService.detail(postId));
     }
 }

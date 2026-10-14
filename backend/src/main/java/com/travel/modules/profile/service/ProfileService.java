@@ -57,6 +57,12 @@ public class ProfileService {
             if (b.getDietaryRestrictions() != null) {
                 profile.setDietaryRestrictions(b.getDietaryRestrictions());
             }
+            if (b.getTripDays() != null) {
+                profile.setTripDays(b.getTripDays());
+            }
+            if (b.getBudgetAmount() != null) {
+                profile.setBudgetAmount(b.getBudgetAmount());
+            }
             PartyStructure p = b.getPartyStructure();
             if (p != null) {
                 if (p.getAdults() != null) {
@@ -200,6 +206,8 @@ public class ProfileService {
         basic.setPace(p.getPace());
         basic.setInterestTags(p.getInterestTags());
         basic.setDietaryRestrictions(p.getDietaryRestrictions());
+        basic.setTripDays(p.getTripDays());
+        basic.setBudgetAmount(p.getBudgetAmount());
         PartyStructure party = new PartyStructure();
         party.setAdults(p.getPartyAdults());
         party.setChildren(p.getPartyChildren());

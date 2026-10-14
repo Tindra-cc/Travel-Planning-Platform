@@ -231,6 +231,8 @@ POST /api/guidebooks/generate
   "userId": "10001",
   "basic": {
     "budgetLevel": "balanced",
+    "budgetAmount": 4000,
+    "tripDays": 5,
     "pace": "relaxed",
     "interestTags": ["nature", "food"],
     "dietaryRestrictions": "无",
@@ -255,6 +257,8 @@ POST /api/guidebooks/generate
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | basic.budgetLevel | string | `budget`/`economy`/`balanced`/`comfort`/`luxury` |
+| basic.budgetAmount | number | 人均预算（元）；可空，不参与完整性校验 |
+| basic.tripDays | number | 常规行程天数；可空，不参与完整性校验 |
 | basic.pace | string | `tight`/`balanced`/`relaxed` |
 | basic.interestTags | string[] | 兴趣标签，至少 1 项 |
 | basic.partyStructure | object | 出行人结构 |
@@ -597,6 +601,85 @@ POST /api/guidebooks/generate
 | `viewCount` | int | 浏览数 |
 | `durationDays` | int \| null | 建议天数 |
 | `budgetLevel` | string \| null | 预算档位，复用画像枚举：`budget`/`economy`/`balanced`/`comfort`/`luxury` |
+
+### 5.8 攻略详情
+
+**GET** `/api/guides/{postId}`
+
+用途：推荐流卡片的**详情页**数据源。返回多图图集 + 按模块（住宿 / 吃饭 / 景点 / 交通）拆分的规划 + 原文外链。列表接口（§5.7）字段保持轻量，重内容只在本接口返回。
+
+需要登录（不带 token 返回 `40100`）；`postId` 不存在或已下架返回 `40400`。本接口**不做浏览数自增**，保持 GET 幂等。
+
+路径参数：
+
+| 参数 | 类型 | 说明 |
+|---|---|---|
+| `postId` | long | 攻略 ID |
+
+响应 `data`（`GuidePostDetail`）：
+
+```json
+{
+  "postId": "1",
+  "title": "成都四天三晚｜把火锅和熊猫一次吃够",
+  "destination": "成都",
+  "coverUrl": "https://picsum.photos/seed/chengdu-panda/640/420",
+  "summary": "落地先睡，第二天熊猫基地赶早、下午宽窄巷子，第三天都江堰，收尾春熙路扫街。",
+  "authorName": "阿茶",
+  "tags": ["美食", "亲子", "四天三晚"],
+  "likeCount": 1284,
+  "viewCount": 20311,
+  "durationDays": 4,
+  "budgetLevel": "balanced",
+  "images": [
+    "https://picsum.photos/seed/chengdu-panda/960/640",
+    "https://picsum.photos/seed/chengdu-panda-2/960/640",
+    "https://picsum.photos/seed/chengdu-panda-3/960/640",
+    "https://picsum.photos/seed/chengdu-panda-4/960/640"
+  ],
+  "sourceUrl": "https://zh.wikipedia.org/wiki/成都市",
+  "planSections": [
+    {
+      "type": "stay",
+      "title": "住宿",
+      "items": [
+        { "name": "宽窄巷子·隐庐", "note": "步行到地铁，出门就是小吃街", "price": "¥420/晚" }
+      ]
+    },
+    {
+      "type": "food",
+      "title": "吃饭",
+      "items": [
+        { "name": "马旺子川小馆", "note": "本地菜，别点网红菜", "price": "人均 ¥80" }
+      ]
+    }
+  ]
+}
+```
+
+`GuidePostDetail` 在 `GuidePostItem`（§5.7）全部字段基础上追加：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `images` | string[] \| null | 图集，首元素与 `coverUrl` 同图 |
+| `sourceUrl` | string \| null | 原文外链；为空则前端不渲染「查看原文」按钮 |
+| `planSections` | GuidePlanSection[] \| null | 模块化规划，按数组顺序渲染 |
+
+`GuidePlanSection`：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `type` | string | `stay`/`food`/`spot`/`transport`（前端按此映射图标，未知值有默认图标） |
+| `title` | string | 模块标题，如「住宿」 |
+| `items` | GuidePlanItem[] | 条目列表 |
+
+`GuidePlanItem`：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `name` | string \| null | 条目名 |
+| `note` | string \| null | 一句话点评 |
+| `price` | string \| null | 价格文案，如 `¥420/晚`、`人均 ¥80` |
 
 ---
 
@@ -1289,6 +1372,7 @@ POST /api/guidebooks/generate
 | FR-12 分享 | §12 | `/api/guidebooks/{id}/share`, `/api/share/*` |
 | FR-13 达人工作台 | §13 | `/api/expert/*` |
 | 推荐攻略流（新增，§13.5 消费侧） | §5.7 | `/api/guides/recommend` |
+| 推荐攻略详情（新增，§13.5 消费侧） | §5.8 | `/api/guides/{postId}` |
 | 通用 | §2, §15, §16 | `/api/auth/*`, `/api/notifications`, `/api/files`, `/api/ws/*` |
 
 ---

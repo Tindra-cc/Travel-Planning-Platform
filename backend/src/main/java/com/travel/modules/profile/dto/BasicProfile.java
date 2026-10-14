@@ -11,4 +11,8 @@ public class BasicProfile {
     private List<String> interestTags;
     private String dietaryRestrictions;
     private PartyStructure partyStructure;
+    /** 常规行程天数 */
+    private Integer tripDays;
+    /** 人均预算金额，单位元 */
+    private Integer budgetAmount;
 }

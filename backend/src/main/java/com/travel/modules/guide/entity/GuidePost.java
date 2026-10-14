@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import com.travel.common.BaseEntity;
+import com.travel.modules.guide.dto.GuidePlanSection;
 
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -32,4 +33,19 @@ public class GuidePost extends BaseEntity {
     private String budgetLevel;
     private String status;
     private Integer sortWeight;
+
+    // ---- 详情字段（V5 新增；列表接口不返回，避免把重内容塞进信息流） ----
+
+    private String sourceUrl;
+
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    private List<String> images;
+
+    /**
+     * 注意：JacksonTypeHandler 按字段的 raw type 反序列化，List&lt;GuidePlanSection&gt; 的 raw type 是
+     * List，可能退化成 List&lt;LinkedHashMap&gt;。输出 JSON 不受影响，但 Java 侧取不到类型安全——
+     * GuideService 里用 ObjectMapper.convertValue 兜一层。
+     */
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    private List<GuidePlanSection> planSections;
 }

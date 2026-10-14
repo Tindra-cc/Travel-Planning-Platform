@@ -49,7 +49,7 @@ Spring Boot 3 + Vue 3 单仓项目。文档：
    mvn spring-boot:run
    ```
 
-   启动日志应显示 Flyway 应用 `V1`~`V4` 迁移。
+   启动日志应显示 Flyway 应用 `V1`~`V7` 迁移。
 
 3. 起前端（端口 5173，已代理 `/api` → `localhost:8080`，含 WebSocket）：
 
@@ -98,6 +98,9 @@ prod 配置（[application-prod.yml](backend/src/main/resources/application-prod
 - `V2__init_chat.sql` — `t_chat_session` / `t_chat_message`
 - `V3__init_guide_post.sql` — `t_guide_post`（推荐攻略流内容表）
 - `V4__seed_guide_posts.sql` — 推荐攻略流**演示种子数据**（15 条），与业务无关，可整表删除
+- `V5__extend_guide_post.sql` — `t_guide_post` 补详情字段：`source_url` / `images` / `plan_sections`
+- `V6__add_profile_trip_plan_fields.sql` — `t_user_profile` 补 `trip_days` / `budget_amount`（不参与完整性校验）
+- `V7__seed_guide_post_details.sql` — 为 `V4` 那 15 条灌详情（图集 / 外链 / 四模块规划），**演示数据**，可整表清空
 
 JSONB 写入依赖 JDBC 连接串上的 `?stringtype=unspecified`，请勿移除。
 
@@ -134,9 +137,9 @@ JSONB 写入依赖 JDBC 连接串上的 `?stringtype=unspecified`，请勿移除
 
 ## 当前进度（Sprint 1）
 
-已完成：鉴权（§2）、用户画像 FR-1（§3）、对话会话 FR-2（§4，含 WS 流式）、推荐攻略流（§5.7，推荐页 + `GET /api/guides/recommend`）。
+已完成：鉴权（§2）、用户画像 FR-1（§3）、对话会话 FR-2（§4，含 WS 流式）、推荐攻略流（§5.7，推荐页 + `GET /api/guides/recommend`）、推荐攻略详情（§5.8，详情页 `/discover/:postId`：多图 + 住宿/吃饭/景点/交通四模块 + 原文外链）。
 
-推荐页 `/discover` 是登录后的落地页，内容为上述 `V4` 演示种子数据（封面图走 picsum.photos 外链，图片内容与目的地无关）。
+推荐页 `/discover` 是登录后的落地页，内容为上述 `V4` 演示种子数据（封面图走 picsum.photos 外链，图片内容与目的地无关）；详情页内容由 `V7` 补充。画像页基础画像含「人均预算」与「行程天数」两个具体数值（`V6`，不影响完整性校验）。
 
 `POST /api/chat/sessions/{id}/confirm` 目前仅将会话置为 `generating`，`guidebookId` 返回 `null`——攻略生成（FR-3）在 Sprint 2 接入。
 

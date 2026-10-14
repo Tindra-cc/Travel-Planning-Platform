@@ -39,5 +39,10 @@ public class UserProfile extends BaseEntity {
     private String transportPreference;
     private String accommodationPreference;
 
+    /** 常规行程天数（V6 新增，可空，不参与完整性校验） */
+    private Integer tripDays;
+    /** 人均预算金额，单位元（V6 新增，可空，不参与完整性校验） */
+    private Integer budgetAmount;
+
     private Integer version;
 }
