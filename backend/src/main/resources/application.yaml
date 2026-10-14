@@ -1,3 +1,35 @@
 spring:
   application:
-    name: travel-api
+    name: travel-planning-platform
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://localhost:5432/travel_platform
+    username: postgres
+    password: 1234
+  #Flyway配置
+  flyway:
+    baseline-on-migrate: true
+    enabled: true
+  #Redis
+  # Redis
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      password:
+      database: 0
+# MyBatis-Plus配置
+mybatis-plus:
+  # mapper xml文件位置
+  mapper-locations: classpath:mapper/**/*.xml
+  # 实体类别名包
+  type-aliases-package: com.travel.modules.*.entity
+  configuration:
+    # 开启sql日志打印，开发环境看执行的SQL语句
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    # 自动驼峰命名转换：数据库 user_name -> java userName
+    map-underscore-to-camel-case: true
+  global-config:
+    # 关闭mybatis-plus启动banner
+    banner: false
+
