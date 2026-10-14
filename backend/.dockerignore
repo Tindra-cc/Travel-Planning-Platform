@@ -1,0 +1,14 @@
+target/
+.mvn/
+mvnw
+mvnw.cmd
+
+# 密钥文件绝不进构建上下文
+.env
+.env.local
+src/main/resources/application-dev-local.yml
+
+.idea/
+*.iml
+.vscode/
+HELP.md

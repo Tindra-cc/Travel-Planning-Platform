@@ -44,7 +44,9 @@ sa-token:
   timeout: 86400
   # 会话由 sa-token-redis-jackson 落 Redis（复用上面的 spring.data.redis 连接），服务重启后登录态不丢
 
-# AI（DeepSeek，key 通过环境变量 DEEPSEEK_API_KEY 注入）
+# AI（DeepSeek）
+# 生产环境不内置 key，必须由环境变量注入；未注入时 aiProperties.configured() 为 false，
+# 意图分析自动降级为规则桩（见 IntentService.fallback），不会因缺 key 而 500。
 ai:
   deepseek:
     base-url: https://api.deepseek.com

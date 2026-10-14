@@ -27,8 +27,6 @@ mybatis-plus:
   # 实体类别名包
   type-aliases-package: com.travel.modules.*.entity
   configuration:
-    # 开启sql日志打印，开发环境看执行的SQL语句
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
     # 自动驼峰命名转换：数据库 user_name -> java userName
     map-underscore-to-camel-case: true
   global-config:

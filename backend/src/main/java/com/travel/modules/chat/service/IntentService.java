@@ -70,6 +70,15 @@ public class IntentService {
     private final AiProperties aiProperties;
     private final ObjectMapper objectMapper;
 
+    /**
+     * 注入当前日期：模型训练数据里的「今天」是过去的，不告诉它就会把「国庆」「下个月」换算错年份。
+     */
+    private String systemPrompt() {
+        return "当前日期：" + LocalDate.now().format(ISO) + "。"
+                + "用户提到的相对时间（如「国庆」「下个月」「下周」）请以此日期为基准换算为具体日期，年份必须正确。\n"
+                + SYSTEM_PROMPT;
+    }
+
     /** 根据完整对话历史分析当前意图。history 为按时间正序的消息列表。 */
     public IntentResult analyze(List<AiMessage> history) {
         if (!aiProperties.configured()) {
@@ -77,7 +86,7 @@ public class IntentService {
         }
         try {
             List<AiMessage> messages = new ArrayList<>();
-            messages.add(AiMessage.system(SYSTEM_PROMPT));
+            messages.add(AiMessage.system(systemPrompt()));
             messages.addAll(history);
             String raw = aiClient.chat(messages);
             IntentResult parsed = parse(raw);

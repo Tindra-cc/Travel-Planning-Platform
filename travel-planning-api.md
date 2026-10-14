@@ -536,6 +536,68 @@ POST /api/guidebooks/generate
 
 `format` 枚举：`markdown` / `pdf` / `html`。
 
+### 5.7 推荐攻略流
+
+**GET** `/api/guides/recommend?page=1&pageSize=12`
+
+用途：推荐页的信息流，返回**已发布到市场**的攻略列表（卡位：封面 / 标题 / 目的地 / 作者 / 收藏数），支持「加载更多」翻页。
+
+> 本接口是 §13.5「发布攻略到市场」的**消费侧**，与 §5.1-5.6 中「用户自己生成的攻略」（FR-3，`/api/guidebooks/*`）是两回事，不要混用。
+> 本期为新增能力：原契约只有发布侧，没有浏览侧。
+
+请求参数：
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `page` | int | 否 | 1 | 页码，从 1 开始 |
+| `pageSize` | int | 否 | 12 | 每页条数，服务端夹取到 `[1,50]` |
+
+需要登录（不带 token 返回 `40100`）。响应为 §1.4 分页结构：
+
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "requestId": "1757bbac-56c0-49df-b0a0-c90fc59ff33b",
+  "data": {
+    "list": [
+      {
+        "postId": "1",
+        "title": "成都四天三晚｜把火锅和熊猫一次吃够",
+        "destination": "成都",
+        "coverUrl": "https://picsum.photos/seed/chengdu-panda/640/420",
+        "summary": "落地先睡，第二天熊猫基地赶早、下午宽窄巷子，第三天都江堰，收尾春熙路扫街。",
+        "authorName": "阿茶",
+        "tags": ["美食", "亲子", "四天三晚"],
+        "likeCount": 1284,
+        "viewCount": 20311,
+        "durationDays": 4,
+        "budgetLevel": "balanced"
+      }
+    ],
+    "page": 1,
+    "pageSize": 12,
+    "total": 15
+  }
+}
+```
+
+`GuidePostItem` 字段：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `postId` | string | 攻略 ID（Long 序列化为字符串） |
+| `title` | string | 标题 |
+| `destination` | string | 目的地 |
+| `coverUrl` | string \| null | 封面图外链；前端需做加载失败兜底 |
+| `summary` | string \| null | 一句话摘要 |
+| `authorName` | string \| null | 作者昵称（无头像字段，前端用首字渐变圆代替） |
+| `tags` | string[] \| null | 标签 |
+| `likeCount` | int | 收藏/点赞数（当前为静态值，无点赞接口） |
+| `viewCount` | int | 浏览数 |
+| `durationDays` | int \| null | 建议天数 |
+| `budgetLevel` | string \| null | 预算档位，复用画像枚举：`budget`/`economy`/`balanced`/`comfort`/`luxury` |
+
 ---
 
 ## 6. 多方案对比与混搭（FR-4，L2）
@@ -1226,6 +1288,7 @@ POST /api/guidebooks/generate
 | FR-11 反馈 | §11 | `/api/reviews*` |
 | FR-12 分享 | §12 | `/api/guidebooks/{id}/share`, `/api/share/*` |
 | FR-13 达人工作台 | §13 | `/api/expert/*` |
+| 推荐攻略流（新增，§13.5 消费侧） | §5.7 | `/api/guides/recommend` |
 | 通用 | §2, §15, §16 | `/api/auth/*`, `/api/notifications`, `/api/files`, `/api/ws/*` |
 
 ---

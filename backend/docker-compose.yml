@@ -1,4 +1,9 @@
-version: '3.8'
+# 生产部署：在服务器上 git clone 后，本目录执行
+#   cp .env.example .env   # 填入真实密钥（.env 不入库；不填也能起，AI/邮件会降级）
+#   docker compose up -d --build
+# 首次构建在容器内完成（多阶段），无需本地预装 JDK/Maven/Node，也无需本地先打包。
+#
+# 变量用 ${VAR:-默认值} 写法：.env 存在则覆盖，缺失则用默认值 → 干净克隆也能直接起。
 services:
   postgres:
     image: postgres:16-alpine
@@ -6,33 +11,62 @@ services:
     environment:
       POSTGRES_DB: travel_db
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 1234
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-1234}
+    # 仅绑定回环：容器内 backend 通过服务名 postgres 访问；绑定 127.0.0.1 只为保留本机 psql 调试，不对公网暴露
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d travel_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: always
 
   redis:
     image: redis:7-alpine
     container_name: travel-redis
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: always
 
   backend:
     build: .
     container_name: travel-api
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # 这些值会被 Spring 的 ${...} 占位符读取（见 application-prod.yml）。
+    # DEEPSEEK_API_KEY / QQ_MAIL_* 缺失不报错：AI 降级为规则桩、验证码接口返回 50300。
+    environment:
+      DB_PASSWORD: ${DB_PASSWORD:-1234}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      QQ_MAIL_USERNAME: ${QQ_MAIL_USERNAME:-}
+      QQ_MAIL_AUTH_CODE: ${QQ_MAIL_AUTH_CODE:-}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost}
     ports:
       - "8080:8080"
-    environment:
-      DB_PASSWORD: 1234
-      REDIS_PASSWORD: ""
+    restart: always
+
+  web:
+    # 前端静态产物 + nginx 反代 /api → backend:8080
+    build: ../frontend
+    container_name: travel-web
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
     restart: always
 
 volumes:

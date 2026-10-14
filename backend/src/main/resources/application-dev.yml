@@ -1,6 +1,10 @@
 #开发环境
 # 开发环境
 spring:
+  # 本地开发密钥来自 application-dev-local.yml（该文件不入库，见 backend/.gitignore）。
+  # 注意：被导入文件的优先级低于声明它的文件，所以 api-key 不能在本文件再写一遍，否则会覆盖成空值。
+  config:
+    import: optional:classpath:application-dev-local.yml
   datasource:
     url: jdbc:postgresql://127.0.0.1:5432/travel_db?stringtype=unspecified
     username: postgres
@@ -47,11 +51,13 @@ sa-token:
   timeout: 86400
   # 会话由 sa-token-redis-jackson 落 Redis（复用上面的 spring.data.redis 连接），服务重启后登录态不丢
 
-# AI（DeepSeek，key 通过环境变量 DEEPSEEK_API_KEY 注入）
+# AI（DeepSeek）
+# 开发环境的 key 放在 application-dev-local.yml（不入库），该文件内以 ${DEEPSEEK_API_KEY:...}
+# 形式书写，故环境变量仍可覆盖。文件缺失时 api-key 为空 → IntentService 自动降级为规则桩。
+# 生产环境（application-prod.yml）不引入该文件，只认环境变量注入。
 ai:
   deepseek:
     base-url: https://api.deepseek.com
-    api-key: ${DEEPSEEK_API_KEY:}
     model: deepseek-chat
     timeout: 60s
 
@@ -60,6 +66,11 @@ logging:
   level:
     root: info
     com.travel: debug
+
+# 开发环境打印执行的 SQL；生产环境不打印（见 application.yaml 说明）
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
 
 # 跨域允许来源（逗号分隔）
 app:
