@@ -1,0 +1,61 @@
+/* 覆盖 Element Plus 默认蓝，接入品牌色。必须在 element-plus/dist/index.css 之后引入。 */
+:root {
+  --el-color-primary: var(--brand-500);
+  /* Element 不会从主色推导明度阶梯，需手写补全 */
+  --el-color-primary-light-3: #4ec5bc;
+  --el-color-primary-light-5: #7fd9d2;
+  --el-color-primary-light-7: #b3e8e4;
+  --el-color-primary-light-8: #ccf0ed;
+  --el-color-primary-light-9: var(--brand-050);
+  --el-color-primary-dark-2: var(--brand-600);
+
+  --el-color-success: #2fbf8f;
+  --el-color-warning: var(--accent-500);
+
+  --el-border-radius-base: 10px;
+  --el-font-family: var(--font-sans);
+  --el-text-color-primary: var(--text-1);
+  --el-text-color-regular: var(--text-2);
+  --el-text-color-placeholder: var(--text-3);
+  --el-border-color: var(--border);
+  --el-border-color-light: var(--border);
+
+  /* 分段控件（账号类型）选中态 */
+  --el-radio-button-checked-bg-color: var(--brand-050);
+  --el-radio-button-checked-text-color: var(--brand-600);
+  --el-radio-button-checked-border-color: var(--brand-500);
+}
+
+.el-input__wrapper,
+.el-textarea__inner {
+  border-radius: var(--radius-sm);
+}
+
+.el-button {
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+}
+
+.el-button--primary:not(.is-text):not(.is-link) {
+  background: var(--grad-brand);
+  border: none;
+  box-shadow: 0 6px 16px rgba(18, 179, 168, 0.28);
+}
+
+.el-button--primary:not(.is-text):not(.is-link):hover,
+.el-button--primary:not(.is-text):not(.is-link):focus {
+  background: var(--grad-brand);
+  filter: brightness(1.05);
+}
+
+.el-card {
+  border: none;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+}
+
+.el-card__header {
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  color: var(--text-1);
+}

@@ -6,13 +6,18 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      redirect: '/profile'
+      redirect: '/discover'
     },
     {
       path: '/login',
       name: 'login',
       component: () => import('@/views/LoginView.vue'),
       meta: { public: true }
+    },
+    {
+      path: '/discover',
+      name: 'discover',
+      component: () => import('@/views/DiscoverView.vue')
     },
     {
       path: '/profile',
@@ -28,6 +33,11 @@ const router = createRouter({
       path: '/guidebook',
       name: 'guidebook',
       component: () => import('@/views/GuidebookView.vue')
+    },
+    {
+      // 兜底：任何未匹配路径都不能让 router-view 空渲染（否则白屏）
+      path: '/:pathMatch(.*)*',
+      redirect: '/discover'
     }
   ]
 })
@@ -38,7 +48,7 @@ router.beforeEach((to) => {
     return { name: 'login', query: { redirect: to.fullPath } }
   }
   if (to.name === 'login' && auth.isLoggedIn) {
-    return { path: '/profile' }
+    return { path: '/discover' }
   }
   return true
 })

@@ -1,5 +1,5 @@
 <template>
-  <div class="container">
+  <div class="profile-page">
     <el-card header="基础画像">
       <el-form :model="basic" label-width="100px">
         <el-form-item label="预算档位">
@@ -22,16 +22,16 @@
         </el-form-item>
         <el-form-item label="出行人结构">
           <div class="party-row">
-            <span>成人</span><el-input-number v-model="basic.partyStructure.adults" :min="0" />
-            <span>儿童</span><el-input-number v-model="basic.partyStructure.children" :min="0" />
-            <span>老人</span><el-input-number v-model="basic.partyStructure.elderly" :min="0" />
-            <span>宠物</span><el-input-number v-model="basic.partyStructure.pets" :min="0" />
+            <span class="party-label">成人</span><el-input-number v-model="basic.partyStructure.adults" :min="0" />
+            <span class="party-label">儿童</span><el-input-number v-model="basic.partyStructure.children" :min="0" />
+            <span class="party-label">老人</span><el-input-number v-model="basic.partyStructure.elderly" :min="0" />
+            <span class="party-label">宠物</span><el-input-number v-model="basic.partyStructure.pets" :min="0" />
           </div>
         </el-form-item>
       </el-form>
     </el-card>
 
-    <el-card header="深度画像（L2）" style="margin-top: 16px">
+    <el-card header="深度画像（L2）">
       <el-form :model="advanced" label-width="100px">
         <el-form-item label="特殊偏好">
           <el-select v-model="advanced.specialPreferences" multiple placeholder="可多选">
@@ -62,15 +62,15 @@
           </el-select>
         </el-form-item>
       </el-form>
+
+      <div class="actions">
+        <el-button type="primary" :loading="saving" @click="onSave">保存画像</el-button>
+        <el-button @click="onCheck">完整性检查</el-button>
+        <span v-if="version !== null" class="version">版本 {{ version }}</span>
+      </div>
     </el-card>
 
-    <div class="actions">
-      <el-button type="primary" :loading="saving" @click="onSave">保存画像</el-button>
-      <el-button @click="onCheck">完整性检查</el-button>
-      <span v-if="version !== null" class="version">版本 {{ version }}</span>
-    </div>
-
-    <el-card header="出行人档案" style="margin-top: 16px">
+    <el-card>
       <template #header>
         <div class="card-header">
           <span>出行人档案</span>
@@ -272,22 +272,34 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.profile-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
 .party-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   flex-wrap: wrap;
 }
-.actions {
-  margin-top: 16px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.version {
-  color: #909399;
+.party-label {
+  color: var(--text-2);
   font-size: 13px;
 }
+
+.actions {
+  margin-top: var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.version {
+  color: var(--text-3);
+  font-size: 13px;
+}
+
 .card-header {
   display: flex;
   justify-content: space-between;

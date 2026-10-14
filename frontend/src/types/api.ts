@@ -159,3 +159,19 @@ export interface SessionListItem {
   status: string
   updatedAt: string
 }
+
+// ---- §5.7 推荐攻略流 ----
+
+export interface GuidePostItem {
+  postId: string
+  title: string
+  destination: string
+  coverUrl: string | null
+  summary: string | null
+  authorName: string | null
+  tags: string[] | null
+  likeCount: number
+  viewCount: number
+  durationDays: number | null
+  budgetLevel: string | null
+}

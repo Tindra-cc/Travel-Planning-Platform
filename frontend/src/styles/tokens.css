@@ -1,0 +1,61 @@
+/* 设计 token：清新旅行风。各组件只引用变量，不硬编码颜色。 */
+:root {
+  /* 主色：青绿 */
+  --brand-600: #0e9f9b;
+  --brand-500: #12b3a8;
+  --brand-300: #7fd9d2;
+  --brand-050: #e8f7f6;
+
+  /* 渐变副色与强调色 */
+  --sky-500: #38bdf8;
+  --accent-500: #fb8c4c;
+  --accent-050: #fff6ef;
+  --grad-brand: linear-gradient(135deg, #12b3a8 0%, #38bdf8 100%);
+
+  /* 中性 */
+  --bg-page: #f5fafb;
+  --surface: #ffffff;
+  --text-1: #0f2a33;
+  --text-2: #5b7c88;
+  --text-3: #93aab3;
+  --border: #e3eef0;
+
+  /* 圆角阶梯 */
+  --radius-lg: 20px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
+
+  /* 阴影 */
+  --shadow-soft: 0 10px 30px rgba(18, 179, 168, 0.12);
+  --shadow-float: 0 18px 44px rgba(18, 179, 168, 0.18);
+
+  /* 4px 网格间距 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  /* 字体：国内环境不引外链字体，走系统栈 */
+  --font-sans: system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei',
+    'Helvetica Neue', Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-page);
+  color: var(--text-1);
+  -webkit-font-smoothing: antialiased;
+}

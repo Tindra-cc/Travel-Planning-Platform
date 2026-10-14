@@ -26,23 +26,36 @@
       </ul>
     </el-card>
 
-    <el-card class="chat-panel" header="AI 规划对话">
+    <el-card class="chat-panel">
+      <template #header>
+        <div class="card-header">
+          <span>AI 规划对话</span>
+        </div>
+      </template>
+
       <div ref="scrollRef" class="chat-box">
         <div v-for="(m, idx) in messages" :key="idx" :class="['bubble-row', m.role]">
-          <div class="bubble">
-            <div>{{ m.content }}</div>
-          </div>
+          <div class="bubble">{{ m.content }}</div>
         </div>
+        <div v-if="!messages.length" class="chat-empty">
+          <div class="chat-empty-ico">💬</div>
+          <p>说一句你想去哪，比如「国庆想去成都，玩四天」</p>
+        </div>
+
         <div v-if="pendingQuestions.length" class="questions">
-          <div class="questions-title">待澄清：</div>
-          <el-tag v-for="q in pendingQuestions" :key="q.questionId" class="question-tag">
-            {{ q.text }}
-          </el-tag>
+          <div class="questions-title">待澄清</div>
+          <div class="questions-tags">
+            <el-tag v-for="q in pendingQuestions" :key="q.questionId" effect="plain" round>
+              {{ q.text }}
+            </el-tag>
+          </div>
         </div>
       </div>
 
       <div class="status-bar">
-        <el-tag :type="statusType(currentStatus)">{{ statusLabel(currentStatus) }}</el-tag>
+        <el-tag :type="statusType(currentStatus)" effect="light" round>
+          {{ statusLabel(currentStatus) }}
+        </el-tag>
         <el-button
           v-if="currentStatus === 'ready_to_generate'"
           type="success"
@@ -59,6 +72,7 @@
           v-model="input"
           type="textarea"
           :rows="2"
+          resize="none"
           :disabled="currentStatus === 'generating'"
           placeholder="描述你的旅行需求，回车发送"
           @keyup.enter.exact="onSend"
@@ -265,34 +279,57 @@ onBeforeUnmount(closeSocket)
 <style scoped>
 .chat-page {
   display: flex;
-  gap: 16px;
+  gap: var(--space-4);
+  align-items: flex-start;
 }
+
 .session-panel {
-  width: 260px;
+  width: 268px;
   flex-shrink: 0;
 }
 .chat-panel {
   flex: 1;
+  min-width: 0;
 }
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .session-list {
   list-style: none;
   margin: 0;
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
 }
 .session-list li {
-  padding: 8px;
-  border-radius: 4px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
+  transition: background 0.15s;
 }
 .session-list li:hover {
-  background: #f5f7fa;
+  background: var(--bg-page);
 }
 .session-list li.active {
-  background: #ecf5ff;
+  background: var(--brand-050);
+}
+.session-list li.active .session-title {
+  color: var(--brand-600);
+  font-weight: 600;
 }
 .session-title {
   font-size: 14px;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
+  color: var(--text-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .session-meta {
   display: flex;
@@ -300,60 +337,94 @@ onBeforeUnmount(closeSocket)
   align-items: center;
 }
 .session-list .empty {
-  color: #909399;
+  color: var(--text-3);
   text-align: center;
   cursor: default;
+  font-size: 13px;
+  padding: var(--space-6) 0;
 }
+.session-list .empty:hover {
+  background: none;
+}
+
 .chat-box {
-  height: 420px;
+  height: 440px;
   overflow-y: auto;
-  border: 1px solid #eee;
-  border-radius: 4px;
-  padding: 10px;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-page);
 }
 .bubble-row {
   display: flex;
-  margin-bottom: 10px;
+  margin-bottom: var(--space-3);
 }
 .bubble-row.user {
   justify-content: flex-end;
 }
 .bubble {
-  max-width: 70%;
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: #f4f4f5;
+  max-width: 72%;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-1);
+  font-size: 14px;
+  line-height: 1.6;
   white-space: pre-wrap;
+  word-break: break-word;
 }
 .bubble-row.user .bubble {
-  background: #409eff;
+  background: var(--grad-brand);
+  border: none;
   color: #fff;
+  box-shadow: 0 6px 16px rgba(18, 179, 168, 0.22);
 }
+
+.chat-empty {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  color: var(--text-3);
+  font-size: 14px;
+}
+.chat-empty-ico {
+  font-size: 40px;
+  opacity: 0.7;
+}
+.chat-empty p {
+  margin: 0;
+}
+
 .questions {
-  margin-top: 12px;
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--border);
 }
 .questions-title {
   font-size: 13px;
-  color: #909399;
-  margin-bottom: 6px;
+  color: var(--text-2);
+  margin-bottom: var(--space-2);
+  font-weight: 500;
 }
-.question-tag {
-  margin-right: 8px;
+.questions-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
+
 .status-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin: 12px 0;
+  gap: var(--space-3);
+  margin: var(--space-4) 0;
 }
 .input-row {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: flex-end;
-}
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
 }
 </style>
