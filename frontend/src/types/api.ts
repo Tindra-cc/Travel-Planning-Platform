@@ -70,6 +70,10 @@ export interface BasicProfile {
   interestTags?: string[]
   dietaryRestrictions?: string
   partyStructure?: PartyStructure
+  /** 常规行程天数 */
+  tripDays?: number
+  /** 人均预算金额（元） */
+  budgetAmount?: number
 }
 
 export interface AdvancedProfile {
@@ -174,4 +178,27 @@ export interface GuidePostItem {
   viewCount: number
   durationDays: number | null
   budgetLevel: string | null
+}
+
+// ---- §5.8 攻略详情 ----
+
+export interface GuidePlanItem {
+  name: string | null
+  note: string | null
+  price: string | null
+}
+
+export interface GuidePlanSection {
+  /** stay / food / spot / transport，未知值走默认图标 */
+  type: string
+  title: string
+  items: GuidePlanItem[]
+}
+
+export interface GuidePostDetail extends GuidePostItem {
+  /** 图集外链，首元素与 coverUrl 同源 */
+  images: string[] | null
+  /** 原文外链；为空则不显示「查看原文」 */
+  sourceUrl: string | null
+  planSections: GuidePlanSection[] | null
 }

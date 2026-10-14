@@ -20,6 +20,11 @@ const router = createRouter({
       component: () => import('@/views/DiscoverView.vue')
     },
     {
+      path: '/discover/:postId',
+      name: 'guide-detail',
+      component: () => import('@/views/GuideDetailView.vue')
+    },
+    {
       path: '/profile',
       name: 'profile',
       component: () => import('@/views/ProfileView.vue')

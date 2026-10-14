@@ -1,12 +1,33 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ChatDotRound, Compass, MapLocation, User } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
+const route = useRoute()
 const router = useRouter()
+
+// 菜单高亮按路径首段取：攻略详情页 /discover/12 也要让「推荐」保持选中
+const activeMenu = computed(() => `/${route.path.split('/')[1] ?? ''}`)
+
+// 递增后 router-view 以新 key 重新挂载当前视图，实现“再次跳转即刷新”
+const viewKey = ref(0)
+
+function refreshView() {
+  viewKey.value++
+}
+
+// 点击当前所在导航项时，路由不会变化，改为重新挂载刷新数据
+function onMenuSelect(index: string) {
+  if (index === route.path) refreshView()
+}
+
+function goHome() {
+  if (route.path === '/' || route.path === '/discover') refreshView()
+  else router.push('/')
+}
 
 async function onLogout() {
   await auth.logout()
@@ -29,7 +50,7 @@ onMounted(async () => {
   <div class="app">
     <header class="app-nav">
       <div class="nav-inner">
-        <div class="brand" @click="router.push('/')">
+        <div class="brand" @click="goHome">
           <span class="brand-mark">✈</span>
           <span class="brand-text">AI 旅行规划助理</span>
         </div>
@@ -39,7 +60,8 @@ onMounted(async () => {
           class="nav-menu"
           mode="horizontal"
           router
-          :default-active="$route.path"
+          :default-active="activeMenu"
+          @select="onMenuSelect"
         >
           <el-menu-item index="/discover">
             <el-icon><Compass /></el-icon>
@@ -68,7 +90,7 @@ onMounted(async () => {
     </header>
 
     <main class="app-main">
-      <router-view />
+      <router-view :key="`${route.fullPath}#${viewKey}`" />
     </main>
   </div>
 </template>

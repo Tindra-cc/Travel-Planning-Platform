@@ -23,6 +23,7 @@
       <div class="empty-ico">🧭</div>
       <h3>暂时没有可推荐的攻略</h3>
       <p>稍后再来看看，或者先去「对话」里说说你想去哪。</p>
+      <el-button type="primary" @click="router.push('/chat')">去对话聊聊</el-button>
     </div>
 
     <div v-else class="grid">
@@ -30,7 +31,7 @@
         v-for="post in items"
         :key="post.postId"
         class="card"
-        @click="openDetail(post)"
+        @click="goDetail(post)"
       >
         <div class="cover">
           <img
@@ -65,48 +66,6 @@
       <el-button v-if="hasMore" :loading="loadingMore" @click="loadMore">加载更多</el-button>
       <span v-else-if="items.length" class="no-more">没有更多了</span>
     </div>
-
-    <el-dialog v-model="dialogVisible" width="min(620px, 92vw)" align-center>
-      <div v-if="active" class="detail">
-        <div class="detail-cover">
-          <img
-            v-if="active.coverUrl && !coverFailed(active.postId)"
-            :src="active.coverUrl"
-            :alt="active.title"
-            @error="onCoverError(active.postId)"
-          />
-          <div v-else class="cover-fallback">
-            <span>{{ active.destination.charAt(0) }}</span>
-          </div>
-        </div>
-
-        <h2 class="detail-title">{{ active.title }}</h2>
-
-        <div class="detail-meta">
-          <span class="avatar" :style="{ background: avatarBg(active.postId) }">
-            {{ initial(active.authorName) }}
-          </span>
-          <span>{{ active.authorName || '旅行者' }}</span>
-          <span class="dot">·</span>
-          <span>目的地 {{ active.destination }}</span>
-          <span class="dot">·</span>
-          <span>{{ formatCount(active.likeCount) }} 收藏</span>
-        </div>
-
-        <p class="detail-summary">{{ active.summary }}</p>
-
-        <div class="detail-tags">
-          <el-tag v-if="active.durationDays" effect="plain" round>{{ active.durationDays }} 天</el-tag>
-          <el-tag v-if="active.budgetLevel" effect="plain" round>{{ budgetLabel(active.budgetLevel) }}</el-tag>
-          <el-tag v-for="t in active.tags || []" :key="t" effect="plain" round>{{ t }}</el-tag>
-        </div>
-      </div>
-
-      <template #footer>
-        <el-button @click="dialogVisible = false">关闭</el-button>
-        <el-button type="primary" @click="goChat">按这个生成我的行程</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -117,13 +76,6 @@ import { recommendGuides } from '@/api/guide'
 import type { GuidePostItem } from '@/types/api'
 
 const PAGE_SIZE = 12
-const BUDGET_LABELS: Record<string, string> = {
-  budget: '穷游',
-  economy: '经济',
-  balanced: '均衡',
-  comfort: '舒适',
-  luxury: '奢华'
-}
 
 const router = useRouter()
 const items = ref<GuidePostItem[]>([])
@@ -132,8 +84,6 @@ const page = ref(0)
 const loading = ref(false)
 const loadingMore = ref(false)
 const coverFailedIds = ref(new Set<string>())
-const active = ref<GuidePostItem | null>(null)
-const dialogVisible = ref(false)
 
 const hasMore = computed(() => items.value.length < total.value)
 
@@ -161,10 +111,6 @@ function formatCount(n: number) {
   return String(n)
 }
 
-function budgetLabel(level: string) {
-  return BUDGET_LABELS[level] ?? level
-}
-
 async function load(targetPage: number, append: boolean) {
   if (append) loadingMore.value = true
   else loading.value = true
@@ -185,14 +131,8 @@ function loadMore() {
   load(page.value + 1, true)
 }
 
-function openDetail(post: GuidePostItem) {
-  active.value = post
-  dialogVisible.value = true
-}
-
-function goChat() {
-  dialogVisible.value = false
-  router.push('/chat')
+function goDetail(post: GuidePostItem) {
+  router.push({ name: 'guide-detail', params: { postId: post.postId } })
 }
 
 onMounted(() => load(1, false))
@@ -371,46 +311,5 @@ onMounted(() => load(1, false))
 .no-more {
   font-size: 13px;
   color: var(--text-3);
-}
-
-.detail-cover {
-  aspect-ratio: 16 / 9;
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  background: var(--brand-050);
-}
-.detail-cover img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.detail-title {
-  margin: var(--space-4) 0 var(--space-2);
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1.4;
-  color: var(--text-1);
-}
-.detail-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--text-2);
-}
-.detail-meta .dot {
-  color: var(--text-3);
-}
-.detail-summary {
-  margin: var(--space-4) 0;
-  font-size: 14px;
-  line-height: 1.75;
-  color: var(--text-2);
-}
-.detail-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
 }
 </style>

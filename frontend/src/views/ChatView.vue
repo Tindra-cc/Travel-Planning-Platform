@@ -92,10 +92,14 @@
 
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as chatApi from '@/api/chat'
 import { openChatSocket, type MessageDelta } from '@/utils/ws'
 import type { ChatMessage, PendingQuestion, SessionListItem } from '@/types/api'
+
+const route = useRoute()
+const router = useRouter()
 
 const STATUS_LABELS: Record<string, string> = {
   collecting: '信息采集中',
@@ -144,12 +148,34 @@ function startNew() {
 
 async function selectSession(id: string) {
   closeSocket()
-  const detail = await chatApi.getSession(id)
-  sessionId.value = id
-  currentStatus.value = detail.status
-  messages.value = detail.messages
-  pendingQuestions.value = detail.pendingQuestions ?? []
-  scrollToBottom()
+  try {
+    const detail = await chatApi.getSession(id)
+    sessionId.value = id
+    currentStatus.value = detail.status
+    messages.value = detail.messages
+    pendingQuestions.value = detail.pendingQuestions ?? []
+    scrollToBottom()
+  } catch {
+    // 拦截器已提示
+  }
+}
+
+// 从推荐卡片跳转过来时，用目的地/时长预填首句；从攻略页带 sessionId 回来时直接打开该会话
+function applyContextFromQuery() {
+  const { destination, title, durationDays, sessionId: sid } = route.query
+  if (typeof sid === 'string' && sid) {
+    void selectSession(sid)
+    return
+  }
+  if (typeof destination === 'string' && destination) {
+    const days = typeof durationDays === 'string' ? Number(durationDays) : NaN
+    input.value =
+      Number.isFinite(days) && days > 0
+        ? `我想去${destination}玩${days}天`
+        : `我想去${destination}旅行`
+  } else if (typeof title === 'string' && title) {
+    input.value = `我想参考「${title}」安排一次旅行`
+  }
 }
 
 async function onSend() {
@@ -248,9 +274,15 @@ async function onConfirm() {
   try {
     const res = await chatApi.confirmSession(sessionId.value)
     currentStatus.value = res.status
-    ElMessage.success(
-      res.guidebookId ? '已触发生成' : '已触发生成（生成流程将在 Sprint 2 接入）'
-    )
+    if (res.guidebookId) {
+      ElMessage.success('攻略已生成')
+      router.push({
+        name: 'guidebook',
+        query: { sessionId: sessionId.value, guidebookId: res.guidebookId }
+      })
+    } else {
+      ElMessage.success('已触发生成（生成流程将在 Sprint 2 接入）')
+    }
   } catch {
     // 拦截器已提示
   } finally {
@@ -259,7 +291,11 @@ async function onConfirm() {
 }
 
 async function onDelete(id: string) {
-  await ElMessageBox.confirm('确认删除该会话？', '提示', { type: 'warning' })
+  try {
+    await ElMessageBox.confirm('确认删除该会话？', '提示', { type: 'warning' })
+  } catch {
+    return // 用户取消
+  }
   await chatApi.deleteSession(id)
   if (id === sessionId.value) startNew()
   await loadSessions()
@@ -272,7 +308,10 @@ function closeSocket() {
   }
 }
 
-onMounted(loadSessions)
+onMounted(async () => {
+  await loadSessions()
+  applyContextFromQuery()
+})
 onBeforeUnmount(closeSocket)
 </script>
 

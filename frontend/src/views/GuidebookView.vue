@@ -10,8 +10,9 @@
       <div class="empty-state">
         <div class="empty-ico">🗺️</div>
         <h3>还没有生成攻略</h3>
-        <p>在「对话」里描述你的旅行需求，信息收集完成后即可一键生成行程与攻略。</p>
-        <el-button type="primary" @click="router.push('/chat')">去对话</el-button>
+        <p v-if="fromSession">已收到来自会话 {{ fromSession }} 的生成请求，攻略详情将在生成完成后展示。</p>
+        <p v-else>在「对话」里描述你的旅行需求，信息收集完成后即可一键生成行程与攻略。</p>
+        <el-button type="primary" @click="goChat">去对话</el-button>
         <p class="empty-note">攻略生成（FR-3）将在 Sprint 2 接入</p>
       </div>
     </el-card>
@@ -19,9 +20,18 @@
 </template>
 
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
+const route = useRoute()
 const router = useRouter()
+
+const fromSession = computed(() => (typeof route.query.sessionId === 'string' ? route.query.sessionId : ''))
+
+// 带着来源会话回去时，直接定位到该会话
+function goChat() {
+  router.push(fromSession.value ? { path: '/chat', query: { sessionId: fromSession.value } } : { path: '/chat' })
+}
 </script>
 
 <style scoped>

@@ -7,6 +7,15 @@
             <el-option v-for="o in budgetOptions" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
         </el-form-item>
+        <el-form-item label="人均预算">
+          <el-input-number v-model="basic.budgetAmount" :min="0" :max="200000" :step="500" />
+          <span class="field-unit">元</span>
+          <span class="field-hint">{{ budgetHint }}</span>
+        </el-form-item>
+        <el-form-item label="行程天数">
+          <el-input-number v-model="basic.tripDays" :min="1" :max="60" />
+          <span class="field-unit">天</span>
+        </el-form-item>
         <el-form-item label="行程节奏">
           <el-select v-model="basic.pace" placeholder="请选择">
             <el-option v-for="o in paceOptions" :key="o.value" :label="o.label" :value="o.value" />
@@ -111,7 +120,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import * as profileApi from '@/api/profile'
 import type { TravelerResponse } from '@/types/api'
@@ -157,13 +166,28 @@ const accommodationOptions = [
   { value: 'resort', label: '度假村' }
 ]
 
+// 档位 -> 人均预算参考区间，仅作提示，不自动改写用户已填金额
+const BUDGET_AMOUNT_HINT: Record<string, string> = {
+  budget: '穷游档参考 ¥1,000–2,500/人',
+  economy: '经济档参考 ¥2,500–4,000/人',
+  balanced: '均衡档参考 ¥4,000–6,500/人',
+  comfort: '舒适档参考 ¥6,500–12,000/人',
+  luxury: '奢华档参考 ¥12,000+/人'
+}
+
 const basic = ref({
   budgetLevel: '',
+  budgetAmount: undefined as number | undefined,
+  tripDays: undefined as number | undefined,
   pace: '',
   interestTags: [] as string[],
   dietaryRestrictions: '',
   partyStructure: { adults: 0, children: 0, elderly: 0, pets: 0 }
 })
+
+const budgetHint = computed(
+  () => BUDGET_AMOUNT_HINT[basic.value.budgetLevel] ?? '选择预算档位后给出参考区间'
+)
 const advanced = ref({
   specialPreferences: [] as string[],
   acceptRedEye: false,
@@ -189,6 +213,8 @@ async function loadProfile() {
   const res = await profileApi.getProfile()
   basic.value = {
     budgetLevel: res.basic?.budgetLevel ?? '',
+    budgetAmount: res.basic?.budgetAmount ?? undefined,
+    tripDays: res.basic?.tripDays ?? undefined,
     pace: res.basic?.pace ?? '',
     interestTags: res.basic?.interestTags ?? [],
     dietaryRestrictions: res.basic?.dietaryRestrictions ?? '',
@@ -276,6 +302,17 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+}
+
+.field-unit {
+  color: var(--text-2);
+  font-size: 13px;
+  margin-left: 8px;
+}
+.field-hint {
+  color: var(--text-3);
+  font-size: 12px;
+  margin-left: 8px;
 }
 
 .party-row {
