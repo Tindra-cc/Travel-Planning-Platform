@@ -6,6 +6,8 @@ spring:
     url: jdbc:postgresql://localhost:5432/travel_platform
     username: postgres
     password: 1234
+  profiles:
+    active: dev
   #Flyway配置
   flyway:
     baseline-on-migrate: true

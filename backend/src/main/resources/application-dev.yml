@@ -1,0 +1,43 @@
+#开发环境
+# 开发环境
+spring:
+  datasource:
+    url: jdbc:postgresql://127.0.0.1:5432/travel_db
+    username: postgres
+    password: 1234
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      password:
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
+# actuator健康检查
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+# Sa-Token
+sa-token:
+  token-name: Authorization
+  timeout: 86400
+
+# 日志
+logging:
+  level:
+    root: info
+    com.travel: debug
+
+# 跨域允许来源（逗号分隔）
+app:
+  cors:
+    allowed-origins: http://localhost:5173,http://127.0.0.1:5173
+

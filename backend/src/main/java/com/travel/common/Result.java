@@ -30,10 +30,10 @@ public class Result<T> {
         return  success(null);
     }
 
-    public static <T> Result<T> fail(ResultCode resultCode){
+    public static <T> Result<T> fail(ResultCode code){
         return Result.<T>builder()
-                .code(ResultCode.FAIL.getCode())
-                .message(ResultCode.FAIL.getMessage())
+                .code(code.getCode())
+                .message(code.getMessage())
                 .requestId(UUID.randomUUID().toString())
                 .data(null)
                 .build();

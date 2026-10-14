@@ -26,6 +26,6 @@ public class BaseEntity {
      * 逻辑删除 0未删除 1已删除
      */
     @TableLogic
-    @TableField ("deleted")
+    @TableField(value = "deleted", fill = FieldFill.INSERT)
     private Integer deleted;
 }
