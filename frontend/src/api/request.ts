@@ -4,6 +4,17 @@ import type { Result } from '@/types/api'
 
 export const TOKEN_KEY = 'travel_token'
 
+/** 携带业务码的请求错误，供页面按码做差异化处理（如账号锁定 42300）。 */
+export class ApiError extends Error {
+  constructor(
+    public code: number,
+    message: string
+  ) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}
+
 const instance: AxiosInstance = axios.create({
   baseURL: '/api',
   timeout: 30000
@@ -25,7 +36,7 @@ instance.interceptors.response.use(
         return body.data
       }
       handleBusinessError(body.code, body.message)
-      return Promise.reject(new Error(body.message))
+      return Promise.reject(new ApiError(body.code, body.message))
     }
     return response.data
   },
@@ -33,7 +44,7 @@ instance.interceptors.response.use(
     const body = error.response?.data as Result | undefined
     if (body && typeof body.code === 'number') {
       handleBusinessError(body.code, body.message)
-      return Promise.reject(new Error(body.message))
+      return Promise.reject(new ApiError(body.code, body.message))
     }
     ElMessage.error(error.message || '网络异常，请稍后重试')
     return Promise.reject(error)

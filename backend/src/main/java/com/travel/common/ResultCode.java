@@ -16,6 +16,7 @@ public enum ResultCode {
     TOKEN_EXPIRED(40101, "token 过期", HttpStatus.UNAUTHORIZED),
     FORBIDDEN(40300, "无权限（含用户层不足）", HttpStatus.FORBIDDEN),
     NOT_OWNER(40301, "非资源所有者", HttpStatus.FORBIDDEN),
+    ACCOUNT_LOCKED(42300, "账号已锁定", HttpStatus.LOCKED),
     NOT_FOUND(40400, "资源不存在", HttpStatus.NOT_FOUND),
     CONFLICT(40900, "状态冲突", HttpStatus.CONFLICT),
     UNPROCESSABLE(42200, "业务规则不满足", HttpStatus.UNPROCESSABLE_ENTITY),
