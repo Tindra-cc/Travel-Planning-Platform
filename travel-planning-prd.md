@@ -885,7 +885,17 @@ P2 自营预订演进时,架构改动控制在执行域,其他层不动:
 - 推荐流卡片由「弹窗」改为跳转**独立详情页** `/discover/:postId`：多图图集、四模块（住宿/吃饭/景点/交通）详细规划、原文外链。新增接口 `GET /api/guides/{postId}`（API 文档 §5.8），`t_guide_post` 加 `source_url`/`images`/`plan_sections`（迁移 `V5`），详情内容由 `V7` 种子补充。业务定义见上文 **FR-N 推荐攻略流**。
 - 画像页基础画像补「人均预算」与「行程天数」两个具体数值（`t_user_profile` 加 `trip_days`/`budget_amount`，迁移 `V6`）；两者**不参与**完整性校验，保持已冻结的 v2.0 `profileCompleted` 语义不变。
 
-**5. 尚未落地**：FR-3 攻略生成链路（`POST /api/chat/sessions/{id}/confirm` 目前只置会话为 `generating`，`guidebookId` 返回 `null`），计划 Sprint 2 接入；§4-§13 其余 FR 亦未开工。
+**5. 落地：FR-3 AI 一键攻略生成**
+
+`POST /api/chat/sessions/{id}/confirm` 现返回真实 `guidebookId`，异步流水线依次执行：意图校验 → 知识召回 → 天气/汇率 → prompt 组装 → 模型生成 → 结构校验 → 溯源标注 → 落库。对应的落地取舍（原技术方案中的重组件未引入）：
+
+- 知识检索用 PostgreSQL `pg_trgm`（`t_knowledge_doc`，迁移 `V9`/`V10`），未引入 Milvus；接口已抽象，可替换向量检索。
+- 编排用自研显式流水线 + 步骤级降级（`GenerationStep`），未引入 Spring AI Alibaba Graph；步骤顺序可平移到 Graph。
+- 异步用进程内线程池 + DB 状态机 + Redis 进度 + 启动恢复，未引入 RocketMQ。
+- 模型链：DeepSeek → 通义千问（DashScope，`Qwen`）→ 模板；无任何密钥也能产出 draft，并以 `degradedMode` / `degradationReasons` 明示降级。
+- 实时数据接 Open-Meteo 与 open.er-api.com（无需密钥）；节庆/开放时间暂无免费稳定源，统一标注“时效未知”。
+
+进度推送采用 WS + 轮询双通道；失败可重试（最多 3 次），启动时自动回收超过 10 分钟的中断任务。§4-§13 其余 FR 仍未开工。
 
 ---
 

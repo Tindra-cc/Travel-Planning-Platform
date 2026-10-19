@@ -60,6 +60,12 @@ ai:
     base-url: https://api.deepseek.com
     model: deepseek-chat
     timeout: 60s
+  # 通义千问：DeepSeek 失败后的兜底模型；不配 key 时跳过，不影响生成（最终还有模板降级）
+  dashscope:
+    base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    api-key: ${DASHSCOPE_API_KEY:}
+    model: qwen-plus
+    timeout: 60s
 
 # 日志
 logging:

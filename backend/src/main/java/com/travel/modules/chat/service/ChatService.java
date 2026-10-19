@@ -26,6 +26,8 @@ import com.travel.modules.chat.entity.ChatMessage;
 import com.travel.modules.chat.entity.ChatSession;
 import com.travel.modules.chat.mapper.ChatMessageMapper;
 import com.travel.modules.chat.mapper.ChatSessionMapper;
+import com.travel.modules.guidebook.dto.GenerateGuidebookResponse;
+import com.travel.modules.guidebook.service.GuidebookService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -38,6 +40,7 @@ public class ChatService {
     private final ChatSessionMapper sessionMapper;
     private final ChatMessageMapper messageMapper;
     private final IntentService intentService;
+    private final GuidebookService guidebookService;
 
     /** §4.1 创建会话：保存首条用户消息 → 分析意图 → 落库 AI 回复。 */
     public SessionResponse createSession(String firstMessage) {
@@ -106,15 +109,11 @@ public class ChatService {
         return resp;
     }
 
-    /** §4.4 确认意图并触发生成。FR-3 生成流程在 Sprint 2 接入，本期仅置状态。 */
+    /** §4.4 确认意图并触发生成；幂等返回同一本攻略。 */
     public ConfirmResponse confirm(Long sessionId) {
-        ChatSession session = requireOwned(sessionId);
-        if (!ChatSession.STATUS_READY.equals(session.getStatus())) {
-            throw new BizException(ResultCode.UNPROCESSABLE, "当前会话尚未就绪，无法生成攻略");
-        }
-        session.setStatus(ChatSession.STATUS_GENERATING);
-        sessionMapper.updateById(session);
-        return new ConfirmResponse(session.getId(), session.getStatus(), session.getGuidebookId());
+        requireOwned(sessionId);
+        GenerateGuidebookResponse result = guidebookService.generateFromSession(sessionId);
+        return new ConfirmResponse(sessionId, result.getStatus(), result.getGuidebookId());
     }
 
     /** §4.5 会话列表（分页）。 */

@@ -202,3 +202,85 @@ export interface GuidePostDetail extends GuidePostItem {
   sourceUrl: string | null
   planSections: GuidePlanSection[] | null
 }
+
+// ---- §5 FR-3 个性化攻略生成 ----
+
+export interface GuidebookTimeSlot {
+  start: string | null
+  end: string | null
+}
+
+export interface GuidebookPlace {
+  name: string | null
+  lat?: number | null
+  lng?: number | null
+}
+
+export interface GuidebookNode {
+  nodeId: string | null
+  timeSlot: GuidebookTimeSlot | null
+  /** activity / meal / transport / stay / free */
+  type: string | null
+  place: GuidebookPlace | null
+  resourceSlotId?: string | null
+  source: string | null
+  dataFreshness: string | null
+  note: string | null
+}
+
+export interface GuidebookDay {
+  day: number | null
+  nodes: GuidebookNode[] | null
+}
+
+export interface BudgetItem {
+  category: string | null
+  min: number | null
+  max: number | null
+}
+
+export interface BudgetBreakdown {
+  currency: string | null
+  items: BudgetItem[] | null
+  total: { min: number | null; max: number | null } | null
+}
+
+export interface GuidebookDetail {
+  guidebookId: string
+  status: string
+  version: number | null
+  title: string | null
+  intent: Record<string, unknown> | null
+  days: GuidebookDay[] | null
+  budgetBreakdown: BudgetBreakdown | null
+  packingList: string[] | null
+  culturalTips: string[] | null
+  pitfallTips: string[] | null
+  disclaimer: string | null
+  degradedMode: boolean | null
+  degradationReasons: string[] | null
+  currentStep: string | null
+  progress: number | null
+  errorMessage: string | null
+}
+
+export interface GenerateGuidebookResponse {
+  guidebookId: string
+  status: string
+  estimatedSeconds: number
+}
+
+export interface GuidebookListItem {
+  guidebookId: string
+  title: string | null
+  status: string
+  progress: number | null
+  version: number | null
+  updatedAt: string
+}
+
+export interface GuidebookExportResponse {
+  format: string
+  filename: string
+  content: string
+}

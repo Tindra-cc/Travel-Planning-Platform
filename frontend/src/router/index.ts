@@ -40,6 +40,11 @@ const router = createRouter({
       component: () => import('@/views/GuidebookView.vue')
     },
     {
+      path: '/guidebook/:guidebookId',
+      name: 'guidebook-detail',
+      component: () => import('@/views/GuidebookView.vue')
+    },
+    {
       // 兜底：任何未匹配路径都不能让 router-view 空渲染（否则白屏）
       path: '/:pathMatch(.*)*',
       redirect: '/discover'

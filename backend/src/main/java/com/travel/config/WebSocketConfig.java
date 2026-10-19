@@ -8,6 +8,8 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 
 import com.travel.modules.chat.ws.ChatHandshakeInterceptor;
 import com.travel.modules.chat.ws.ChatWebSocketHandler;
+import com.travel.modules.guidebook.ws.GuidebookHandshakeInterceptor;
+import com.travel.modules.guidebook.ws.GuidebookWebSocketHandler;
 
 import lombok.RequiredArgsConstructor;
 
@@ -18,6 +20,8 @@ public class WebSocketConfig implements WebSocketConfigurer {
 
     private final ChatWebSocketHandler chatWebSocketHandler;
     private final ChatHandshakeInterceptor chatHandshakeInterceptor;
+    private final GuidebookWebSocketHandler guidebookWebSocketHandler;
+    private final GuidebookHandshakeInterceptor guidebookHandshakeInterceptor;
 
     @Value("${app.cors.allowed-origins:http://localhost:5173,http://127.0.0.1:5173}")
     private String[] allowedOrigins;
@@ -26,6 +30,9 @@ public class WebSocketConfig implements WebSocketConfigurer {
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(chatWebSocketHandler, "/api/ws/chat/{sessionId}")
                 .addInterceptors(chatHandshakeInterceptor)
+                .setAllowedOrigins(allowedOrigins);
+        registry.addHandler(guidebookWebSocketHandler, "/api/ws/guidebook/{guidebookId}")
+                .addInterceptors(guidebookHandshakeInterceptor)
                 .setAllowedOrigins(allowedOrigins);
     }
 }

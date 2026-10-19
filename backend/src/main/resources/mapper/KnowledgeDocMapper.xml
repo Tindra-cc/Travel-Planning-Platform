@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.travel.modules.guidebook.mapper.KnowledgeDocMapper">
+
+    <select id="search" resultType="com.travel.modules.guidebook.entity.KnowledgeDoc">
+        SELECT k.*,
+               (CASE WHEN k.destination = #{destination} THEN 3 ELSE 0 END
+                + CASE WHEN k.doc_type = 'guide' THEN 1 ELSE 0 END
+                + COALESCE(k.sort_weight, 0)::numeric / 1000) AS match_score
+        FROM t_knowledge_doc k
+        WHERE k.deleted = 0
+          AND (
+            k.destination = #{destination}
+            <if test="keywords != null and keywords.size() > 0">
+                OR
+                <foreach collection="keywords" item="kw" open="(" separator=" OR " close=")">
+                    k.title ILIKE '%' || #{kw} || '%' OR k.content ILIKE '%' || #{kw} || '%'
+                </foreach>
+            </if>
+          )
+        ORDER BY match_score DESC, k.sort_weight DESC, k.id DESC
+        LIMIT #{limit}
+    </select>
+</mapper>

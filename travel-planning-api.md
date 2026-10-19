@@ -403,7 +403,7 @@ POST /api/guidebooks/generate
 
 **POST** `/api/chat/sessions/{sessionId}/confirm`
 
-用途：会话状态 `ready_to_generate` → 触发生成工作流。
+用途：会话状态 `ready_to_generate` → 触发生成工作流。重复确认幂等返回同一 `guidebookId`；每用户同时只允许一个生成任务（并发返回 `42900`），每日配额默认 3 次。
 
 响应 `data`：
 
@@ -459,7 +459,7 @@ POST /api/guidebooks/generate
 {
   "guidebookId": "g50001",
   "status": "generating",
-  "estimatedSeconds": 20
+  "estimatedSeconds": 30
 }
 ```
 
@@ -1302,17 +1302,17 @@ POST /api/guidebooks/generate
 
 ### 16.1 攻略生成进度推送
 
-**WS** `/api/ws/guidebooks/{guidebookId}`
+**WS** `/api/ws/guidebook/{guidebookId}?token=<token>`
 
-服务端推送消息：
+连接建立后立即下发当前进度，之后每次步骤切换推送：
 
 ```json
 {
-  "event": "generation_progress",
+  "type": "guidebook_progress",
   "guidebookId": "g50001",
-  "step": "schedule_arrangement",
-  "progress": 60,
-  "message": "正在编排日程"
+  "status": "generating",
+  "currentStep": "itinerary_compose",
+  "progress": 60
 }
 ```
 
@@ -1320,11 +1320,25 @@ POST /api/guidebooks/generate
 
 ```json
 {
-  "event": "generation_completed",
+  "type": "guidebook_done",
   "guidebookId": "g50001",
-  "status": "draft"
+  "status": "draft",
+  "progress": 100
 }
 ```
+
+失败事件：
+
+```json
+{
+  "type": "error",
+  "guidebookId": "g50001",
+  "status": "failed",
+  "message": "AI 服务暂不可用"
+}
+```
+
+> 前端在 WS 未连上或断开时回退为每 2 秒轮询 `GET /api/guidebooks/{guidebookId}`，终态自动停止。
 
 ### 16.2 出行中调整建议推送
 

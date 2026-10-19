@@ -6,10 +6,11 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 
 import com.travel.ai.AiProperties;
+import com.travel.ai.DashScopeProperties;
 
 @SpringBootApplication
 @MapperScan("com.travel.modules.*.mapper")
-@EnableConfigurationProperties(AiProperties.class)
+@EnableConfigurationProperties({ AiProperties.class, DashScopeProperties.class })
 public class TravelApplication {
 
 	public static void main(String[] args) {

@@ -20,6 +20,7 @@ Spring Boot 3 + Vue 3 单仓项目。文档：
 | 变量 | 说明 | 必需 |
 |---|---|---|
 | `DEEPSEEK_API_KEY` | DeepSeek API Key。未配置时对话模块自动降级为规则澄清桩，链路仍可跑通 | 否（不配则降级） |
+| `DASHSCOPE_API_KEY` | 通义千问（DashScope）API Key，DeepSeek 失败后的兜底模型；两者都不配时攻略生成使用模板 | 否（不配则降级） |
 | `QQ_MAIL_USERNAME` | QQ 邮箱地址，用于发送注册验证码 | 否（不配则 dev 回显） |
 | `QQ_MAIL_AUTH_CODE` | QQ 邮箱 **SMTP 授权码**（非 QQ 密码）：QQ 邮箱 → 设置 → 账户 → 开启 SMTP 服务后生成 | 否（不配则 dev 回显） |
 | `DB_PASSWORD` | 生产环境数据库口令（dev 使用 `application-dev.yml` 内置值 `1234`） | prod 是 |
@@ -133,15 +134,25 @@ JSONB 写入依赖 JDBC 连接串上的 `?stringtype=unspecified`，请勿移除
   - `{"event":"message_done","messageId":...,"sessionStatus":...,"pendingQuestions":[...]}`
   - `{"event":"error","message":"..."}`
 
-> 注：本期 `message_delta` 为服务端分块推送（先整段生成再按片下发），非模型 token 级流式；FR-3 生成编排落地后再切换为真流式。
+> 注：本期 `message_delta` 为服务端分块推送（先整段生成再按片下发），非模型 token 级流式。
 
-## 当前进度（Sprint 1）
+## 攻略生成（FR-3）
+
+- 触发：`POST /api/guidebooks/generate`（传 `sessionId` 或 `intent`），或确认会话 `POST /api/chat/sessions/{id}/confirm`（两者幂等，同一会话返回同一本攻略）。
+- 查询：`GET /api/guidebooks/{id}`；失败重试 `POST /api/guidebooks/{id}/retry`（最多 3 次）；配额默认 3 次/天。
+- 进度 WS：`ws://<host>/api/ws/guidebook/{guidebookId}?token=<token>`，事件为 `guidebook_progress` / `guidebook_done` / `error`；前端断线时每 2 秒轮询兜底。
+- 降级链：DeepSeek → 通义千问（`DASHSCOPE_API_KEY`）→ 模板。**不配任何 key 也能产出 draft**，此时 `degradedMode=true`、来源标注“模板生成”。
+- 知识库：PostgreSQL + `pg_trgm`（`t_knowledge_doc`，V9 建表 / V10 演示数据），不依赖 Milvus。
+- 实时数据：Open-Meteo 天气 + open.er-api.com 汇率（均无需密钥）；失败只记录 `weather_unavailable` / `exchange_unavailable`，不阻断生成。
+- 异步与恢复：进程内线程池 + DB 状态机 + Redis 进度；重启时超过 10 分钟仍为 `generating` 的任务自动置 `failed`，可重试。
+
+## 当前进度（Sprint 1–2）
 
 已完成：鉴权（§2）、用户画像 FR-1（§3）、对话会话 FR-2（§4，含 WS 流式）、推荐攻略流（§5.7，推荐页 + `GET /api/guides/recommend`）、推荐攻略详情（§5.8，详情页 `/discover/:postId`：多图 + 住宿/吃饭/景点/交通四模块 + 原文外链）。
 
 推荐页 `/discover` 是登录后的落地页，内容为上述 `V4` 演示种子数据（封面图走 picsum.photos 外链，图片内容与目的地无关）；详情页内容由 `V7` 补充。画像页基础画像含「人均预算」与「行程天数」两个具体数值（`V6`，不影响完整性校验）。
 
-`POST /api/chat/sessions/{id}/confirm` 目前仅将会话置为 `generating`，`guidebookId` 返回 `null`——攻略生成（FR-3）在 Sprint 2 接入。
+FR-3 攻略生成已交付：对话确认 → 异步流水线 → 进度推送 → `/guidebook/:guidebookId` 三态页面（生成中 / 失败重试 / 草稿），支持日程、预算、贴士与溯源展示，以及 Markdown/HTML 导出。
 
 ## 常用命令
 

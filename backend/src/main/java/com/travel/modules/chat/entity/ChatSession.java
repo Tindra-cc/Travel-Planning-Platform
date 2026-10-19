@@ -20,6 +20,8 @@ public class ChatSession extends BaseEntity {
     public static final String STATUS_COLLECTING = "collecting";
     public static final String STATUS_READY = "ready_to_generate";
     public static final String STATUS_GENERATING = "generating";
+    public static final String STATUS_GENERATED = "generated";
+    public static final String STATUS_FAILED = "failed";
 
     private Long userId;
     private String title;

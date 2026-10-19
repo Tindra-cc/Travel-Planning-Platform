@@ -1,5 +1,7 @@
 package com.travel.modules.auth.entity;
 
+import java.time.LocalDate;
+
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.travel.common.BaseEntity;
 
@@ -23,5 +25,7 @@ public class User extends BaseEntity {
     private Integer status;
     private Integer dailyGenerateQuota;
     private Integer dailyGenerateUsed;
+    /** 配额计数所属日期；跨天时生成服务会重置 used（V11）。 */
+    private LocalDate generateQuotaDate;
     private Boolean profileCompleted;
 }

@@ -104,14 +104,17 @@ const router = useRouter()
 const STATUS_LABELS: Record<string, string> = {
   collecting: '信息采集中',
   ready_to_generate: '待生成',
-  generating: '生成中'
+  generating: '生成中',
+  generated: '已生成',
+  failed: '生成失败'
 }
 function statusLabel(status: string) {
   return STATUS_LABELS[status] ?? status
 }
-function statusType(status: string): 'success' | 'warning' | 'info' {
-  if (status === 'ready_to_generate') return 'success'
+function statusType(status: string): 'success' | 'warning' | 'info' | 'danger' {
+  if (status === 'ready_to_generate' || status === 'generated') return 'success'
   if (status === 'generating') return 'warning'
+  if (status === 'failed') return 'danger'
   return 'info'
 }
 
@@ -275,13 +278,13 @@ async function onConfirm() {
     const res = await chatApi.confirmSession(sessionId.value)
     currentStatus.value = res.status
     if (res.guidebookId) {
-      ElMessage.success('攻略已生成')
+      ElMessage.success('已触发生成，正在为你规划攻略')
+      await loadSessions()
       router.push({
-        name: 'guidebook',
-        query: { sessionId: sessionId.value, guidebookId: res.guidebookId }
+        name: 'guidebook-detail',
+        params: { guidebookId: res.guidebookId },
+        query: { sessionId: sessionId.value }
       })
-    } else {
-      ElMessage.success('已触发生成（生成流程将在 Sprint 2 接入）')
     }
   } catch {
     // 拦截器已提示
