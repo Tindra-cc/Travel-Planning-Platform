@@ -31,6 +31,7 @@ import com.travel.modules.guidebook.dto.UpdateNodeRequest;
 import com.travel.modules.guidebook.edit.ConflictDetector;
 import com.travel.modules.guidebook.entity.Guidebook;
 import com.travel.modules.guidebook.entity.GuidebookVersion;
+import com.travel.modules.guidebook.entity.ResourceSlot;
 import com.travel.modules.guidebook.mapper.GuidebookMapper;
 import com.travel.support.TestFixtures;
 
@@ -44,13 +45,15 @@ class GuidebookEditServiceTest {
     private GuidebookMapper guidebookMapper;
     @Mock
     private GuidebookVersionService versionService;
+    @Mock
+    private ResourceService resourceService;
 
     private GuidebookEditService service;
 
     @BeforeEach
     void setUp() {
         UserContext.set(new LoginUser(USER_ID, "user1@test.local"));
-        service = new GuidebookEditService(guidebookMapper, versionService);
+        service = new GuidebookEditService(guidebookMapper, versionService, resourceService);
     }
 
     @AfterEach
@@ -129,6 +132,36 @@ class GuidebookEditServiceTest {
                 () -> service.updateNode(GUIDEBOOK_ID, 99, "d1-1", new UpdateNodeRequest()));
         assertBizCode(ResultCode.NOT_FOUND,
                 () -> service.updateNode(GUIDEBOOK_ID, 1, "missing", new UpdateNodeRequest()));
+    }
+
+    // ---- bindResource ----
+
+    @Test
+    void bindResourceSetsSlotAndAppendsSnapshot() {
+        Guidebook guidebook = guidebook(Guidebook.STATUS_DRAFT);
+        stubUpdateSuccess(guidebook);
+        ResourceSlot slot = new ResourceSlot();
+        slot.setId("r70001");
+        when(resourceService.requireBindable("r70001")).thenReturn(slot);
+
+        GuidebookEditResponse response = service.bindResource(GUIDEBOOK_ID, "d1-1", "r70001");
+
+        assertThat(guidebook.getDays().get(0).getNodes().get(0).getResourceSlotId())
+                .isEqualTo("r70001");
+        assertThat(response.getChangeSummary()).contains("绑定资源", "宽窄巷子");
+        verify(versionService).append(eq(guidebook), eq(GuidebookVersion.CHANGE_TYPE_MANUAL),
+                anyString(), eq(USER_ID));
+    }
+
+    @Test
+    void bindResourceWithNullSlotUnbinds() {
+        Guidebook guidebook = guidebook(Guidebook.STATUS_EDITING);
+        guidebook.getDays().get(0).getNodes().get(0).setResourceSlotId("r70001");
+        stubUpdateSuccess(guidebook);
+
+        service.bindResource(GUIDEBOOK_ID, "d1-1", null);
+
+        assertThat(guidebook.getDays().get(0).getNodes().get(0).getResourceSlotId()).isNull();
     }
 
     // ---- addNode ----

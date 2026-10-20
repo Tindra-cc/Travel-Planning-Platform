@@ -67,6 +67,7 @@ public class GuidebookService {
     private final StringRedisTemplate redisTemplate;
     private final TransactionTemplate transactionTemplate;
     private final ObjectMapper objectMapper;
+    private final ResourceService resourceService;
 
     /** §5.1 触发攻略生成；同会话幂等，每用户同一时间只允许一个生成任务。 */
     public GenerateGuidebookResponse generate(GenerateGuidebookRequest req) {
@@ -145,11 +146,14 @@ public class GuidebookService {
         resp.setVersion(guidebook.getVersion());
         resp.setTitle(guidebook.getTitle());
         resp.setIntent(guidebook.getIntent());
+        resourceService.enrichNodes(guidebook.getDays());
         resp.setDays(guidebook.getDays());
         resp.setBudgetBreakdown(guidebook.getBudgetBreakdown());
         resp.setPackingList(guidebook.getPackingList());
         resp.setCulturalTips(guidebook.getCulturalTips());
         resp.setPitfallTips(guidebook.getPitfallTips());
+        resp.setTravelData(guidebook.getTravelData());
+        resp.setTravelDataAt(guidebook.getTravelDataAt());
         resp.setDisclaimer(DISCLAIMER);
         resp.setDegradedMode(guidebook.getDegradedMode());
         resp.setDegradationReasons(guidebook.getDegradationReasons());
@@ -260,8 +264,8 @@ public class GuidebookService {
 
     // ---- 内部方法 ----
 
-    private Guidebook createGuidebook(Long userId, Long sessionId, IntentDto intent,
-            Map<String, Object> snapshot) {
+    /** 每次普通生成扣一次配额；对比生成一次扣一次（由调用方只调用一次）。 */
+    public void consumeQuotaOnce(Long userId) {
         User user = userMapper.selectForUpdate(userId);
         if (user == null) {
             throw new BizException(ResultCode.UNAUTHORIZED, "用户不存在或已禁用");
@@ -279,6 +283,32 @@ public class GuidebookService {
         user.setDailyGenerateUsed(used + 1);
         user.setGenerateQuotaDate(today);
         userMapper.updateById(user);
+    }
+
+    /** FR-4：为对比方案创建一条独立的生成中攻略，不重复扣配额。 */
+    public Guidebook createComparisonGuidebook(Long userId, Guidebook base, String variant,
+            Long comparisonId) {
+        Guidebook guidebook = new Guidebook();
+        guidebook.setUserId(userId);
+        guidebook.setSessionId(null);
+        guidebook.setStatus(Guidebook.STATUS_GENERATING);
+        guidebook.setVersion(1);
+        guidebook.setIntent(base.getIntent());
+        guidebook.setProfileSnapshot(base.getProfileSnapshot());
+        guidebook.setComparisonId(comparisonId);
+        guidebook.setVariant(variant);
+        guidebook.setDegradedMode(false);
+        guidebook.setCurrentStep("queued");
+        guidebook.setProgress(0);
+        guidebook.setAttemptCount(1);
+        guidebook.setStartedAt(LocalDateTime.now());
+        guidebookMapper.insert(guidebook);
+        return guidebook;
+    }
+
+    private Guidebook createGuidebook(Long userId, Long sessionId, IntentDto intent,
+            Map<String, Object> snapshot) {
+        consumeQuotaOnce(userId);
 
         Guidebook guidebook = new Guidebook();
         guidebook.setUserId(userId);
@@ -349,7 +379,7 @@ public class GuidebookService {
         }
     }
 
-    private Map<String, Object> loadProfileSnapshot(Long userId) {
+    public Map<String, Object> loadProfileSnapshot(Long userId) {
         UserProfile profile = profileMapper.selectOne(new LambdaQueryWrapper<UserProfile>()
                 .eq(UserProfile::getUserId, userId)
                 .last("LIMIT 1"));
@@ -377,7 +407,7 @@ public class GuidebookService {
         return session;
     }
 
-    private Guidebook requireOwned(Long guidebookId) {
+    public Guidebook requireOwned(Long guidebookId) {
         Guidebook guidebook = guidebookMapper.selectById(guidebookId);
         if (guidebook == null) {
             throw new BizException(ResultCode.NOT_FOUND, "攻略不存在");

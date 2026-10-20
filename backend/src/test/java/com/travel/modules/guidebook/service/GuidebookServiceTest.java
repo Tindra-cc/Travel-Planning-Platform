@@ -73,6 +73,8 @@ class GuidebookServiceTest {
     private ValueOperations<String, String> values;
     @Mock
     private TransactionTemplate transactionTemplate;
+    @Mock
+    private ResourceService resourceService;
 
     private GuidebookService service;
 
@@ -80,7 +82,8 @@ class GuidebookServiceTest {
     void setUp() {
         UserContext.set(new LoginUser(USER_ID, "user1@test.local"));
         service = new GuidebookService(guidebookMapper, sessionMapper, userMapper,
-                profileMapper, runner, redis, transactionTemplate, new ObjectMapper());
+                profileMapper, runner, redis, transactionTemplate, new ObjectMapper(),
+                resourceService);
         lenientSetUp();
     }
 

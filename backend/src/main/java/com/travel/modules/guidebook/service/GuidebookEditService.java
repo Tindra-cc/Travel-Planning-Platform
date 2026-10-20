@@ -41,7 +41,41 @@ public class GuidebookEditService {
     
     private final GuidebookMapper guidebookMapper;
     private final GuidebookVersionService versionService;
+    private final ResourceService resourceService;
     private final ConflictDetector conflictDetector = new ConflictDetector();
+
+    /**
+     * 绑定/解绑预订资源；走与手动编辑相同的保存路径（版本 +1、manual 快照、draft→editing）。
+     */
+    @Transactional
+    public GuidebookEditResponse bindResource(Long guidebookId, String nodeId,
+            String resourceSlotId) {
+        Guidebook guidebook = requireEditable(guidebookId);
+        GuidebookNodeDto node = findNodeAnywhere(guidebook, nodeId);
+        if (StringUtils.hasText(resourceSlotId)) {
+            node.setResourceSlotId(resourceService.requireBindable(resourceSlotId).getId());
+        } else {
+            node.setResourceSlotId(null);
+        }
+        String action = StringUtils.hasText(resourceSlotId) ? "绑定资源" : "解绑资源";
+        return save(guidebook, action + "：" + nodeName(node));
+    }
+
+    private GuidebookNodeDto findNodeAnywhere(Guidebook guidebook, String nodeId) {
+        if (guidebook.getDays() != null) {
+            for (GuidebookDayDto day : guidebook.getDays()) {
+                if (day == null || day.getNodes() == null) {
+                    continue;
+                }
+                for (GuidebookNodeDto node : day.getNodes()) {
+                    if (nodeId != null && nodeId.equals(node.getNodeId())) {
+                        return node;
+                    }
+                }
+            }
+        }
+        throw new BizException(ResultCode.NOT_FOUND, "节点不存在");
+    }
 
     /**
      *编辑节点
