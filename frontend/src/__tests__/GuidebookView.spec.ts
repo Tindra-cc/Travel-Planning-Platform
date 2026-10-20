@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createRouter, createMemoryHistory, type Router } from 'vue-router'
-import ElementPlus from 'element-plus'
+import ElementPlus, { ElMessageBox } from 'element-plus'
 import GuidebookView from '@/views/GuidebookView.vue'
 import * as guidebookApi from '@/api/guidebook'
 import { openGuidebookSocket } from '@/utils/guidebookWs'
@@ -11,7 +11,16 @@ vi.mock('@/api/guidebook', () => ({
   getGuidebook: vi.fn(),
   retryGuidebook: vi.fn(),
   deleteGuidebook: vi.fn(),
-  exportGuidebook: vi.fn()
+  exportGuidebook: vi.fn(),
+  validateGuidebook: vi.fn(),
+  confirmGuidebook: vi.fn(),
+  adjustGuidebook: vi.fn(),
+  listGuidebookVersions: vi.fn(),
+  restoreGuidebookVersion: vi.fn(),
+  updateGuidebookNode: vi.fn(),
+  addGuidebookNode: vi.fn(),
+  deleteGuidebookNode: vi.fn(),
+  moveGuidebookNode: vi.fn()
 }))
 
 vi.mock('@/utils/guidebookWs', () => ({
@@ -20,6 +29,11 @@ vi.mock('@/utils/guidebookWs', () => ({
 
 const mockedGet = vi.mocked(guidebookApi.getGuidebook)
 const mockedSocket = vi.mocked(openGuidebookSocket)
+const mockedValidate = vi.mocked(guidebookApi.validateGuidebook)
+const mockedAdjust = vi.mocked(guidebookApi.adjustGuidebook)
+const mockedVersions = vi.mocked(guidebookApi.listGuidebookVersions)
+const mockedRestore = vi.mocked(guidebookApi.restoreGuidebookVersion)
+const mockedAddNode = vi.mocked(guidebookApi.addGuidebookNode)
 
 function detail(overrides: Partial<GuidebookDetail>): GuidebookDetail {
   return {
@@ -57,7 +71,13 @@ async function mountAt(id = '1'): Promise<{ wrapper: ReturnType<typeof mount>; r
   const wrapper = mount(GuidebookView, {
     global: {
       plugins: [router, ElementPlus],
-      stubs: { ElTable: true, ElTableColumn: true }
+      stubs: {
+        ElTable: true,
+        ElTableColumn: true,
+        ElSelect: true,
+        ElOption: true,
+        teleport: true
+      }
     }
   })
   await flushPromises()
@@ -68,6 +88,12 @@ describe('GuidebookView', () => {
   beforeEach(() => {
     mockedGet.mockReset()
     mockedSocket.mockClear()
+    mockedValidate.mockReset()
+    mockedValidate.mockResolvedValue({ valid: true, conflicts: [] })
+    mockedAdjust.mockReset()
+    mockedVersions.mockReset()
+    mockedRestore.mockReset()
+    mockedAddNode.mockReset()
   })
 
   afterEach(() => {
@@ -205,6 +231,146 @@ describe('GuidebookView', () => {
     await retryButton!.trigger('click')
     await flushPromises()
     expect(guidebookApi.retryGuidebook).toHaveBeenCalledWith('1')
+    wrapper.unmount()
+  })
+
+  it('存在冲突时展示面板并禁用确认', async () => {
+    mockedGet.mockResolvedValue(
+      detail({ title: '成都三日', days: [{ day: 1, nodes: [] }] })
+    )
+    mockedValidate.mockResolvedValue({
+      valid: false,
+      conflicts: [{ type: 'time_overlap', day: 1, nodeIds: ['n1', 'n2'], message: '时段重叠' }]
+    })
+
+    const { wrapper } = await mountAt()
+
+    expect(wrapper.text()).toContain('存在 1 处冲突')
+    expect(wrapper.text()).toContain('时段重叠')
+    const confirmButton = wrapper
+      .findAll('button')
+      .find((b) => b.text().includes('确认攻略'))
+    expect(confirmButton!.attributes('disabled')).toBeDefined()
+    wrapper.unmount()
+  })
+
+  it('AI 调整调用接口并刷新攻略', async () => {
+    mockedGet.mockResolvedValue(detail({ days: [{ day: 1, nodes: [] }] }))
+    mockedAdjust.mockResolvedValue({
+      guidebookId: '1',
+      version: 2,
+      changeSummary: '把博物馆挪到 Day2',
+      conflicts: [],
+      changes: []
+    })
+
+    const { wrapper } = await mountAt()
+
+    await wrapper.find('.adjust-input input').setValue('把博物馆挪到第二天')
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text().includes('AI 调整'))!
+      .trigger('click')
+    await flushPromises()
+
+    expect(mockedAdjust).toHaveBeenCalledWith('1', '把博物馆挪到第二天')
+    expect(mockedGet.mock.calls.length).toBeGreaterThanOrEqual(2)
+    wrapper.unmount()
+  })
+
+  it('版本历史展示版本并可回溯', async () => {
+    mockedGet.mockResolvedValue(detail({ days: [{ day: 1, nodes: [] }] }))
+    mockedVersions.mockResolvedValue([
+      {
+        version: 2,
+        title: '成都三日',
+        changeType: 'adjust',
+        changeSummary: 'AI 调整',
+        createdAt: '2026-10-20 09:00:00'
+      }
+    ])
+    mockedRestore.mockResolvedValue({
+      guidebookId: '1',
+      version: 3,
+      changeSummary: '回溯到 v2',
+      conflicts: []
+    })
+    vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
+
+    const { wrapper } = await mountAt()
+
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text().includes('版本历史'))!
+      .trigger('click')
+    await flushPromises()
+
+    expect(mockedVersions).toHaveBeenCalledWith('1')
+    expect(wrapper.text()).toContain('v2')
+    expect(wrapper.text()).toContain('AI 调整')
+
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text().includes('回溯'))!
+      .trigger('click')
+    await flushPromises()
+
+    expect(mockedRestore).toHaveBeenCalledWith('1', 2)
+    wrapper.unmount()
+  })
+
+  it('新增节点提交地点、类型与时段', async () => {
+    mockedGet.mockResolvedValue(detail({ days: [{ day: 1, nodes: [] }] }))
+    mockedAddNode.mockResolvedValue({
+      guidebookId: '1',
+      version: 2,
+      changeSummary: '新增节点',
+      conflicts: []
+    })
+
+    const { wrapper } = await mountAt()
+
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text().includes('新增节点'))!
+      .trigger('click')
+    await flushPromises()
+
+    await wrapper.find('input[placeholder="例如：宽窄巷子"]').setValue('新地点')
+    await wrapper.find('input[placeholder="09:00"]').setValue('09:00')
+    await wrapper.find('input[placeholder="11:00"]').setValue('10:00')
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text().includes('保存'))!
+      .trigger('click')
+    await flushPromises()
+
+    expect(mockedAddNode).toHaveBeenCalledWith(
+      '1',
+      1,
+      expect.objectContaining({
+        type: 'activity',
+        place: { name: '新地点' },
+        timeSlot: { start: '09:00', end: '10:00' }
+      })
+    )
+    wrapper.unmount()
+  })
+
+  it('已确认攻略不显示编辑与确认入口', async () => {
+    mockedGet.mockResolvedValue(
+      detail({
+        status: 'confirmed',
+        title: '成都三日',
+        days: [{ day: 1, nodes: [] }]
+      })
+    )
+
+    const { wrapper } = await mountAt()
+
+    expect(wrapper.text()).not.toContain('AI 调整')
+    expect(wrapper.text()).not.toContain('确认攻略')
+    expect(mockedValidate).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 })

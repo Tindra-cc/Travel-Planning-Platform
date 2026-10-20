@@ -78,6 +78,45 @@
           class="degraded-alert"
         />
 
+        <div class="edit-toolbar">
+          <template v-if="editable">
+            <el-input
+              v-model="instruction"
+              class="adjust-input"
+              maxlength="500"
+              show-word-limit
+              placeholder="用一句话描述想怎么调整，例如：Day2 太赶了，把博物馆挪到第三天"
+              @keyup.enter="onAdjust"
+            />
+            <el-button type="primary" :loading="adjusting" @click="onAdjust">AI 调整</el-button>
+          </template>
+          <el-button @click="openVersions">版本历史</el-button>
+          <el-button
+            v-if="editable"
+            type="success"
+            :loading="confirming"
+            :disabled="conflicts.length > 0"
+            @click="onConfirm"
+          >
+            确认攻略
+          </el-button>
+        </div>
+
+        <el-alert
+          v-if="conflicts.length"
+          type="warning"
+          show-icon
+          :closable="false"
+          class="conflict-alert"
+          :title="`存在 ${conflicts.length} 处冲突，处理后才能确认`"
+        >
+          <ul class="conflict-list">
+            <li v-for="(c, i) in conflicts" :key="`${c.type}-${i}`">
+              {{ c.day ? `第 ${c.day} 天 · ` : '' }}{{ c.message }}
+            </li>
+          </ul>
+        </el-alert>
+
         <el-tabs v-model="activeDay">
           <el-tab-pane
             v-for="day in days"
@@ -85,26 +124,67 @@
             :label="`第 ${day.day} 天`"
             :name="String(day.day)"
           >
-            <el-timeline v-if="day.nodes?.length">
-              <el-timeline-item
-                v-for="node in day.nodes"
-                :key="node.nodeId || String(node.place?.name)"
-                :timestamp="timeRange(node)"
-                placement="top"
+            <div v-if="editable" class="day-toolbar">
+              <el-button size="small" @click="openCreate(day.day)">新增节点</el-button>
+              <span class="muted">拖动节点可调整同日顺序；跨天请用「移到」菜单。</span>
+            </div>
+
+            <div v-if="day.nodes.length" class="node-list">
+              <VueDraggable
+                v-model="day.nodes"
+                :animation="150"
+                :handle="editable ? '.drag-handle' : undefined"
+                :disabled="!editable"
+                @end="onDragEnd(day, $event)"
               >
-                <div class="node-card">
-                  <div class="node-head">
-                    <strong>{{ node.place?.name || '待定地点' }}</strong>
-                    <el-tag size="small" effect="plain">{{ typeLabel(node.type) }}</el-tag>
-                  </div>
-                  <p v-if="node.note" class="node-note">{{ node.note }}</p>
-                  <div class="node-source">
-                    来源：{{ node.source || '通用知识' }}
-                    <span v-if="node.dataFreshness"> · 数据时间 {{ node.dataFreshness }}</span>
+                <div
+                  v-for="node in day.nodes"
+                  :key="node.nodeId ?? node.place?.name ?? 'node'"
+                  class="node-item"
+                >
+                  <span v-if="editable" class="drag-handle" title="拖动排序">⠿</span>
+                  <div class="node-card">
+                    <div class="node-head">
+                      <strong>{{ node.place?.name || '待定地点' }}</strong>
+                      <div class="node-head-right">
+                        <el-tag size="small" effect="plain">{{ typeLabel(node.type) }}</el-tag>
+                        <span class="node-time">{{ timeRange(node) }}</span>
+                      </div>
+                    </div>
+                    <p v-if="node.note" class="node-note">{{ node.note }}</p>
+                    <div class="node-source">
+                      来源：{{ node.source || '通用知识' }}
+                      <span v-if="node.dataFreshness"> · 数据时间 {{ node.dataFreshness }}</span>
+                    </div>
+                    <div v-if="editable && node.nodeId" class="node-actions">
+                      <el-button size="small" text @click="openEdit(day.day, node)">编辑</el-button>
+                      <el-button size="small" text type="danger" @click="onDeleteNode(day.day, node)">
+                        删除
+                      </el-button>
+                      <el-dropdown
+                        v-if="days.length > 1"
+                        trigger="click"
+                        @command="moveHandler(day.day, node)"
+                      >
+                        <el-button size="small" text>移到</el-button>
+                        <template #dropdown>
+                          <el-dropdown-menu>
+                            <el-dropdown-item
+                              v-for="d in days"
+                              :key="d.day"
+                              :command="d.day"
+                              :disabled="d.day === day.day"
+                            >
+                              第 {{ d.day }} 天
+                            </el-dropdown-item>
+                          </el-dropdown-menu>
+                        </template>
+                      </el-dropdown>
+                    </div>
                   </div>
                 </div>
-              </el-timeline-item>
-            </el-timeline>
+              </VueDraggable>
+            </div>
             <el-empty v-else description="本日暂无安排" />
           </el-tab-pane>
         </el-tabs>
@@ -157,16 +237,96 @@
         <p v-if="detail.disclaimer" class="disclaimer">{{ detail.disclaimer }}</p>
       </div>
     </el-card>
+
+    <el-dialog
+      v-model="nodeDialog"
+      :title="nodeMode === 'create' ? '新增节点' : '编辑节点'"
+      width="520px"
+    >
+      <el-form label-width="72px">
+        <el-form-item v-if="nodeMode === 'create'" label="类型">
+          <el-select v-model="nodeForm.type">
+            <el-option
+              v-for="(label, key) in TYPE_LABELS"
+              :key="key"
+              :label="label"
+              :value="key"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="地点">
+          <el-input v-model="nodeForm.name" placeholder="例如：宽窄巷子" />
+        </el-form-item>
+        <el-form-item label="时间">
+          <div class="time-row">
+            <el-input v-model="nodeForm.start" placeholder="09:00" maxlength="5" />
+            <span class="time-sep">至</span>
+            <el-input v-model="nodeForm.end" placeholder="11:00" maxlength="5" />
+          </div>
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input
+            v-model="nodeForm.note"
+            type="textarea"
+            :rows="2"
+            placeholder="可选，例如：提前预约"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="nodeDialog = false">取消</el-button>
+        <el-button type="primary" :loading="submittingNode" @click="onSubmitNode">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-drawer v-model="versionDrawer" title="版本历史" size="420px">
+      <div v-loading="versionsLoading" class="version-body">
+        <el-timeline v-if="versions.length">
+          <el-timeline-item
+            v-for="v in versions"
+            :key="v.version"
+            :timestamp="v.createdAt"
+            placement="top"
+          >
+            <div class="version-row">
+              <div class="version-info">
+                <div class="version-head">
+                  <strong>v{{ v.version }}</strong>
+                  <el-tag size="small" effect="plain">{{ changeTypeLabel(v.changeType) }}</el-tag>
+                </div>
+                <p class="muted">{{ v.changeSummary || '无变更摘要' }}</p>
+              </div>
+              <el-button
+                v-if="editable"
+                size="small"
+                :loading="restoringVersion === v.version"
+                @click="onRestore(v)"
+              >
+                回溯
+              </el-button>
+            </div>
+          </el-timeline-item>
+        </el-timeline>
+        <el-empty v-else description="暂无版本记录" />
+      </div>
+    </el-drawer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { VueDraggable } from 'vue-draggable-plus'
 import * as guidebookApi from '@/api/guidebook'
 import { openGuidebookSocket, type GuidebookProgressEvent } from '@/utils/guidebookWs'
-import type { BudgetBreakdown, GuidebookDay, GuidebookDetail, GuidebookNode } from '@/types/api'
+import type {
+  BudgetBreakdown,
+  GuidebookDetail,
+  GuidebookNode,
+  GuidebookVersionItem,
+  NodeConflict
+} from '@/types/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -174,6 +334,7 @@ const router = useRouter()
 const STATUS_LABELS: Record<string, string> = {
   generating: '生成中',
   draft: '草稿',
+  editing: '编辑中',
   failed: '生成失败',
   confirmed: '已确认',
   executing: '行程中',
@@ -200,6 +361,12 @@ const TYPE_LABELS: Record<string, string> = {
   stay: '住宿',
   free: '自由活动'
 }
+const CHANGE_TYPE_LABELS: Record<string, string> = {
+  generate: '初次生成',
+  manual: '手动编辑',
+  adjust: 'AI 调整',
+  restore: '版本回溯'
+}
 const DEGRADE_LABELS: Record<string, string> = {
   no_knowledge: '未检索到目的地资料',
   weather_unavailable: '天气数据不可用',
@@ -211,20 +378,46 @@ const DEGRADE_LABELS: Record<string, string> = {
   day_count_mismatch: '生成天数与请求不一致',
   data_unavailable: '部分实时数据缺失'
 }
+const EDITABLE_STATUSES = ['draft', 'editing']
+const TIME_PATTERN = /^\d{2}:\d{2}$/
+
+/** 本地可编辑副本：nodes 始终为数组，拖拽后以服务端返回为准重新加载。 */
+interface EditableDay {
+  day: number
+  nodes: GuidebookNode[]
+}
 
 const guidebookId = computed(() => {
   const id = route.params.guidebookId
   return typeof id === 'string' ? id : ''
 })
 const detail = ref<GuidebookDetail | null>(null)
+const days = ref<EditableDay[]>([])
 const loading = ref(false)
 const retrying = ref(false)
 const deleting = ref(false)
 const activeDay = ref('1')
+
+const instruction = ref('')
+const adjusting = ref(false)
+const confirming = ref(false)
+const conflicts = ref<NodeConflict[]>([])
+
+const nodeDialog = ref(false)
+const nodeMode = ref<'create' | 'edit'>('create')
+const submittingNode = ref(false)
+const nodeContext = reactive({ day: 1, nodeId: '', lat: null as number | null, lng: null as number | null })
+const nodeForm = reactive({ type: 'activity', name: '', start: '', end: '', note: '' })
+
+const versionDrawer = ref(false)
+const versions = ref<GuidebookVersionItem[]>([])
+const versionsLoading = ref(false)
+const restoringVersion = ref<number | null>(null)
+
 let socket: WebSocket | null = null
 let pollTimer: number | null = null
 
-const days = computed<GuidebookDay[]>(() => detail.value?.days ?? [])
+const editable = computed(() => EDITABLE_STATUSES.includes(detail.value?.status ?? ''))
 const budget = computed<BudgetBreakdown | null>(() => detail.value?.budgetBreakdown ?? null)
 const progress = computed(() => Math.max(0, Math.min(100, detail.value?.progress ?? 0)))
 const stepLabel = computed(() => STEP_LABELS[detail.value?.currentStep ?? ''] ?? '生成中')
@@ -248,12 +441,16 @@ function statusLabel(status: string) {
 }
 function statusType(status: string): 'success' | 'warning' | 'info' | 'danger' {
   if (status === 'draft') return 'info'
+  if (status === 'editing') return 'warning'
   if (status === 'generating') return 'warning'
   if (status === 'failed') return 'danger'
   return 'success'
 }
 function typeLabel(type: string | null) {
   return type ? TYPE_LABELS[type] ?? type : '活动'
+}
+function changeTypeLabel(type: string) {
+  return CHANGE_TYPE_LABELS[type] ?? type
 }
 function timeRange(node: GuidebookNode) {
   const { start, end } = node.timeSlot ?? {}
@@ -269,26 +466,47 @@ function isGenerating() {
   return detail.value?.status === 'generating'
 }
 
+function syncDays(source: GuidebookDetail | null) {
+  days.value = (source?.days ?? []).map((d) => ({
+    day: d.day ?? 0,
+    nodes: (d.nodes ?? []).map((n) => ({ ...n }))
+  }))
+  if (!days.value.length) return
+  if (!days.value.some((d) => String(d.day) === activeDay.value)) {
+    activeDay.value = String(days.value[0]?.day ?? 1)
+  }
+}
+
 async function load() {
   if (!guidebookId.value) return
   loading.value = true
   try {
     detail.value = await guidebookApi.getGuidebook(guidebookId.value)
-    if (detail.value?.days?.length) {
-      const first = String(detail.value.days[0]?.day ?? 1)
-      if (!detail.value.days.some((d) => String(d.day) === activeDay.value)) {
-        activeDay.value = first
-      }
-    }
+    syncDays(detail.value)
     if (isGenerating()) {
       startPolling()
     } else {
       stopPolling()
     }
+    if (editable.value) {
+      void refreshConflicts()
+    } else {
+      conflicts.value = []
+    }
   } catch {
     // 拦截器已提示
   } finally {
     loading.value = false
+  }
+}
+
+async function refreshConflicts() {
+  if (!guidebookId.value || !editable.value) return
+  try {
+    const res = await guidebookApi.validateGuidebook(guidebookId.value)
+    conflicts.value = res.conflicts ?? []
+  } catch {
+    // 校验失败不阻断页面，确认时会再次由服务端复检
   }
 }
 
@@ -373,6 +591,221 @@ async function onRetry() {
   }
 }
 
+async function onAdjust() {
+  if (!guidebookId.value) return
+  const text = instruction.value.trim()
+  if (!text) {
+    ElMessage.warning('请先输入调整指令')
+    return
+  }
+  adjusting.value = true
+  try {
+    const res = await guidebookApi.adjustGuidebook(guidebookId.value, text)
+    instruction.value = ''
+    ElMessage.success(res.changeSummary || '已完成调整')
+    await load()
+  } catch {
+    // 拦截器已提示
+  } finally {
+    adjusting.value = false
+  }
+}
+
+async function onConfirm() {
+  if (!guidebookId.value) return
+  if (conflicts.value.length) {
+    ElMessage.warning('请先处理行程冲突再确认')
+    return
+  }
+  try {
+    await ElMessageBox.confirm('确认后攻略将不能再编辑，是否继续？', '确认攻略', {
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+  confirming.value = true
+  try {
+    await guidebookApi.confirmGuidebook(guidebookId.value)
+    ElMessage.success('攻略已确认')
+    await load()
+  } catch {
+    // 拦截器已提示
+  } finally {
+    confirming.value = false
+  }
+}
+
+function openCreate(day: number) {
+  nodeMode.value = 'create'
+  nodeContext.day = day
+  nodeContext.nodeId = ''
+  nodeContext.lat = null
+  nodeContext.lng = null
+  nodeForm.type = 'activity'
+  nodeForm.name = ''
+  nodeForm.start = ''
+  nodeForm.end = ''
+  nodeForm.note = ''
+  nodeDialog.value = true
+}
+
+function openEdit(day: number, node: GuidebookNode) {
+  nodeMode.value = 'edit'
+  nodeContext.day = day
+  nodeContext.nodeId = node.nodeId ?? ''
+  nodeContext.lat = node.place?.lat ?? null
+  nodeContext.lng = node.place?.lng ?? null
+  nodeForm.type = node.type ?? 'activity'
+  nodeForm.name = node.place?.name ?? ''
+  nodeForm.start = node.timeSlot?.start ?? ''
+  nodeForm.end = node.timeSlot?.end ?? ''
+  nodeForm.note = node.note ?? ''
+  nodeDialog.value = true
+}
+
+async function onSubmitNode() {
+  if (!guidebookId.value) return
+  const name = nodeForm.name.trim()
+  if (!name) {
+    ElMessage.warning('请填写地点名称')
+    return
+  }
+  const start = nodeForm.start.trim()
+  const end = nodeForm.end.trim()
+  if ((start && !TIME_PATTERN.test(start)) || (end && !TIME_PATTERN.test(end))) {
+    ElMessage.warning('时间格式应为 HH:mm')
+    return
+  }
+  submittingNode.value = true
+  try {
+    const timeSlot = { start: start || null, end: end || null }
+    if (nodeMode.value === 'create') {
+      await guidebookApi.addGuidebookNode(guidebookId.value, nodeContext.day, {
+        type: nodeForm.type,
+        timeSlot,
+        place: { name },
+        note: nodeForm.note.trim() || null
+      })
+    } else {
+      await guidebookApi.updateGuidebookNode(
+        guidebookId.value,
+        nodeContext.day,
+        nodeContext.nodeId,
+        {
+          timeSlot,
+          place: { name, lat: nodeContext.lat, lng: nodeContext.lng },
+          note: nodeForm.note.trim()
+        }
+      )
+    }
+    nodeDialog.value = false
+    await load()
+  } catch {
+    // 拦截器已提示
+  } finally {
+    submittingNode.value = false
+  }
+}
+
+async function onDeleteNode(day: number, node: GuidebookNode) {
+  if (!guidebookId.value || !node.nodeId) return
+  try {
+    await ElMessageBox.confirm(`删除「${node.place?.name || '该节点'}」？`, '提示', {
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+  try {
+    await guidebookApi.deleteGuidebookNode(guidebookId.value, day, node.nodeId)
+    ElMessage.success('已删除')
+    await load()
+  } catch {
+    // 拦截器已提示
+  }
+}
+
+function moveHandler(day: number, node: GuidebookNode) {
+  return (target: number) => onMoveToDay(day, node, target)
+}
+
+async function onMoveToDay(day: number, node: GuidebookNode, targetDay: number) {
+  if (!guidebookId.value || !node.nodeId || targetDay === day) return
+  try {
+    await guidebookApi.moveGuidebookNode(guidebookId.value, node.nodeId, {
+      targetDay,
+      targetIndex: 0
+    })
+    ElMessage.success(`已移到第 ${targetDay} 天`)
+    await load()
+  } catch {
+    // 拦截器已提示
+  }
+}
+
+async function onDragEnd(day: EditableDay, event?: { oldIndex?: number; newIndex?: number }) {
+  if (!editable.value || !guidebookId.value) return
+  const oldIndex = event?.oldIndex
+  const newIndex = event?.newIndex
+  if (oldIndex == null || newIndex == null || oldIndex === newIndex) return
+  const node = day.nodes[newIndex]
+  if (!node?.nodeId) {
+    await load()
+    return
+  }
+  try {
+    await guidebookApi.moveGuidebookNode(guidebookId.value, node.nodeId, {
+      targetDay: day.day,
+      targetIndex: newIndex
+    })
+  } finally {
+    // 以服务端顺序为准，失败时也能恢复
+    await load()
+  }
+}
+
+async function openVersions() {
+  if (!guidebookId.value) return
+  versionDrawer.value = true
+  await loadVersions()
+}
+
+async function loadVersions() {
+  if (!guidebookId.value) return
+  versionsLoading.value = true
+  try {
+    versions.value = await guidebookApi.listGuidebookVersions(guidebookId.value)
+  } catch {
+    // 拦截器已提示
+  } finally {
+    versionsLoading.value = false
+  }
+}
+
+async function onRestore(target: GuidebookVersionItem) {
+  if (!guidebookId.value) return
+  try {
+    await ElMessageBox.confirm(
+      `回溯到 v${target.version}？当前内容会被复制为新版本，历史记录不会丢失。`,
+      '回溯版本',
+      { type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  restoringVersion.value = target.version
+  try {
+    await guidebookApi.restoreGuidebookVersion(guidebookId.value, target.version)
+    ElMessage.success(`已回溯到 v${target.version}`)
+    await Promise.all([load(), loadVersions()])
+  } catch {
+    // 拦截器已提示
+  } finally {
+    restoringVersion.value = null
+  }
+}
+
 async function onExport(format: 'markdown' | 'html') {
   if (!guidebookId.value) return
   try {
@@ -419,7 +852,12 @@ function reset() {
   closeSocket()
   stopPolling()
   detail.value = null
+  days.value = []
   activeDay.value = '1'
+  instruction.value = ''
+  conflicts.value = []
+  versions.value = []
+  versionDrawer.value = false
 }
 
 onMounted(async () => {
@@ -520,11 +958,56 @@ onBeforeUnmount(reset)
   padding: var(--space-4) 0;
 }
 
-.degraded-alert {
+.degraded-alert,
+.conflict-alert {
   margin-bottom: var(--space-4);
 }
+.conflict-list {
+  margin: var(--space-2) 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.7;
+}
 
+.edit-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
+}
+.adjust-input {
+  flex: 1;
+  min-width: 260px;
+}
+
+.day-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.node-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.node-item {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-2);
+}
+.drag-handle {
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  color: var(--text-3);
+  cursor: grab;
+  user-select: none;
+}
 .node-card {
+  flex: 1;
   padding: var(--space-3);
   border: 1px solid var(--line-1, #e5e7eb);
   border-radius: 10px;
@@ -536,6 +1019,15 @@ onBeforeUnmount(reset)
   justify-content: space-between;
   gap: var(--space-2);
 }
+.node-head-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.node-time {
+  font-size: 12px;
+  color: var(--text-3);
+}
 .node-note {
   margin: var(--space-2) 0 0;
   font-size: 13px;
@@ -546,6 +1038,11 @@ onBeforeUnmount(reset)
   margin-top: var(--space-2);
   font-size: 12px;
   color: var(--text-3);
+}
+.node-actions {
+  display: flex;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
 }
 
 .info-grid {
@@ -591,6 +1088,39 @@ onBeforeUnmount(reset)
   margin: var(--space-4) 0 0;
   font-size: 12px;
   color: var(--text-3);
+}
+
+.time-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+}
+.time-sep {
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+.version-body {
+  min-height: 120px;
+}
+.version-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.version-info {
+  min-width: 0;
+}
+.version-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.version-info .muted {
+  margin-top: var(--space-1);
+  line-height: 1.6;
 }
 
 @media (max-width: 860px) {

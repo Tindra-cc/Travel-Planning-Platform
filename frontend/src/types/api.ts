@@ -284,3 +284,48 @@ export interface GuidebookExportResponse {
   filename: string
   content: string
 }
+
+// ---- §7 FR-5 攻略编辑 ----
+export interface NodeConflict{
+  /** time_overlap / unreachable / budget_exceeded / closed_time */
+  type: string
+  day: number | null
+  nodeIds: string[]
+  message: string
+}
+
+export interface GuidebookEditResponse{
+  guidebookId: string
+  version: number
+  changeSummary: string
+  conflicts: NodeConflict[]
+}
+
+export interface GuidebookValidateResponse{
+  valid: boolean
+  conflicts: NodeConflict[]
+}
+
+export interface GuidebookConfirmResponse{
+  guidebookId: string
+  status: string
+}
+
+export interface GuidebookVersionItem{
+  version: number
+  title: string | null
+  /** generate / manual / adjust / restore */
+  changeType: string
+  changeSummary: string | null
+  createdAt: string
+}
+
+export interface GuidebookAdjustResponse extends GuidebookEditResponse{
+  changes: Record<string, unknown>[]
+}
+
+export interface NodePayload{
+  timeSlot: GuidebookTimeSlot
+  place: GuidebookPlace
+  note?: string | null
+}
