@@ -40,6 +40,11 @@ const router = createRouter({
       component: () => import('@/views/GuidebookView.vue')
     },
     {
+      path: '/guidebook/compare/:comparisonId',
+      name: 'guidebook-compare',
+      component: () => import('@/views/CompareView.vue')
+    },
+    {
       path: '/guidebook/:guidebookId',
       name: 'guidebook-detail',
       component: () => import('@/views/GuidebookView.vue')

@@ -62,6 +62,9 @@ public class GuidebookGenerationRunner {
             markFailed(ctx.getGuidebookId(), ctx.getSessionId(), message);
             publisher.failed(ctx.getGuidebookId(), message);
         } finally {
+            if (!ctx.isHoldsGenerateLock()) {
+                return;
+            }
             try {
                 redisTemplate.delete("travel:gen:lock:" + ctx.getUserId());
             } catch (Exception e) {

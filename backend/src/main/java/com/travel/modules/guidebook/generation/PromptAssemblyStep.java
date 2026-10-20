@@ -4,12 +4,15 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.travel.ai.AiMessage;
+import com.travel.modules.guidebook.data.DataBlock;
+import com.travel.modules.guidebook.data.TravelDataSnapshot;
 import com.travel.modules.guidebook.knowledge.KnowledgeSnippet;
 
 import lombok.RequiredArgsConstructor;
@@ -57,9 +60,15 @@ public class PromptAssemblyStep implements GenerationStep {
             1. 每天至少 4 个节点，时间不重叠，覆盖上午、午餐、下午、晚餐；
             2. type 只能取 activity/meal/transport/stay/free；
             3. 时间格式 HH:mm，金额为数字且币种与用户预算一致；
-            4. 优先使用提供的资料，并在 source 中标注对应编号；
-            5. 不要编造资料中不存在的门票价格或营业时间。
+            4. 优先使用提供的资料，并在 source 中以 [K1] 形式标注依据；
+            5. 资料为空或未使用资料时，source 写「知识库无相关资料，基于通用知识生成」；
+            6. 不要编造资料中不存在的门票价格或营业时间；
+            7. 实时数据只使用标记为可用的源；不可用的源写「时效未知」，禁止编造价格、天气或营业时间。
             """;
+
+    private static final Map<String, String> SOURCE_LABELS = Map.of(
+            "weather", "天气", "exchange", "汇率", "local_news", "当地动态",
+            "visa", "签证", "flight_price", "机票价格", "hotel_price", "酒店价格");
 
     private final ObjectMapper objectMapper;
 
@@ -77,6 +86,7 @@ public class PromptAssemblyStep implements GenerationStep {
     public void execute(GenerationContext ctx) {
         StringBuilder sb = new StringBuilder();
         appendIntent(sb, ctx);
+        appendVariant(sb, ctx);
         sb.append("\n【用户画像】\n");
         sb.append(safeJson(ctx.getProfileSnapshot()));
         sb.append("\n【目的地资料】\n");
@@ -122,18 +132,45 @@ public class PromptAssemblyStep implements GenerationStep {
         }
     }
 
+    private void appendVariant(StringBuilder sb, GenerationContext ctx) {
+        String variant = ctx.getVariant();
+        if (variant == null) {
+            return;
+        }
+        sb.append("\n【方案风格】\n");
+        switch (variant) {
+            case "budget" -> sb.append("省钱优先：公共交通、青旅或经济型酒店、免费或低价景点，"
+                    + "餐饮以本地小吃为主，总预算贴近下限。\n");
+            case "balanced" -> sb.append("均衡方案：交通与住宿兼顾舒适与价格，"
+                    + "保留必去景点与一两次特色体验。\n");
+            case "luxury" -> sb.append("品质优先：专车或包车、高品质住宿、付费深度体验，"
+                    + "减少排队与转场，预算上限更宽松。\n");
+            case "mixed" -> sb.append("混搭方案：保留用户指定的地点，补齐必要交通，"
+                    + "调整时间避免冲突，并重算预算。\n");
+            default -> {
+                return;
+            }
+        }
+    }
+
     private void appendTravelData(StringBuilder sb, GenerationContext ctx) {
-        var snapshot = ctx.getTravelData();
-        if (snapshot == null || (snapshot.weatherSummary() == null
-                && snapshot.exchangeSummary() == null)) {
+        TravelDataSnapshot snapshot = ctx.getTravelData();
+        if (snapshot == null || snapshot.blocks().isEmpty()) {
             sb.append("（实时数据暂不可用，请在提示中注明时效未知）\n");
             return;
         }
-        if (snapshot.weatherSummary() != null) {
-            sb.append(snapshot.weatherSummary()).append('\n');
-        }
-        if (snapshot.exchangeSummary() != null) {
-            sb.append(snapshot.exchangeSummary()).append('\n');
+        for (DataBlock block : snapshot.blocks()) {
+            sb.append("· ").append(SOURCE_LABELS.getOrDefault(block.source(), block.source()))
+                    .append("：");
+            if (block.available()) {
+                sb.append(block.summary() == null ? "已采集" : block.summary());
+                if (block.fetchedAt() != null) {
+                    sb.append("（采集于 ").append(block.fetchedAt()).append("）");
+                }
+            } else {
+                sb.append("不可用（时效未知，不要编造具体价格或营业时间）");
+            }
+            sb.append('\n');
         }
         if (snapshot.fetchedAt() != null) {
             sb.append("数据采集时间：").append(snapshot.fetchedAt()).append('\n');

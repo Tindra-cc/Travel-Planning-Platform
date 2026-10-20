@@ -29,6 +29,11 @@ public class GenerationContext {
     private TravelDataSnapshot travelData;
     private List<com.travel.ai.AiMessage> promptMessages = new ArrayList<>();
 
+    /** FR-4：budget / balanced / luxury / mixed；普通生成为空 */
+    private String variant;
+    /** 对比任务不持有普通生成锁，结束时不得误删他人的锁 */
+    private boolean holdsGenerateLock = true;
+
     private String title;
     private List<GuidebookDayDto> days;
     private BudgetBreakdownDto budgetBreakdown;
