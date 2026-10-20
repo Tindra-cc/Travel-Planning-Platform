@@ -56,6 +56,18 @@ services:
       QQ_MAIL_USERNAME: ${QQ_MAIL_USERNAME:-}
       QQ_MAIL_AUTH_CODE: ${QQ_MAIL_AUTH_CODE:-}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost}
+      # FR-8 转链签名；留空则使用进程内随机密钥（重启后旧转链失效）
+      LINK_SIGNING_SECRET: ${LINK_SIGNING_SECRET:-}
+      # FR-7 / FR-6 运营接口白名单（逗号分隔用户 ID）
+      ADMIN_USER_IDS: ${ADMIN_USER_IDS:-}
+      # FR-9 离线包目录，挂载命名卷保证重启不丢文件
+      OFFLINE_PACK_DIR: ${OFFLINE_PACK_DIR:-/app/data/offline-packs}
+      # FR-6 可选价格源；留空则对应数据块标记 unavailable
+      FLIGHT_PRICE_URL: ${FLIGHT_PRICE_URL:-}
+      HOTEL_PRICE_URL: ${HOTEL_PRICE_URL:-}
+      PRICE_SOURCE_TOKEN: ${PRICE_SOURCE_TOKEN:-}
+    volumes:
+      - offline-packs:/app/data/offline-packs
     ports:
       - "8080:8080"
     restart: always
@@ -73,3 +85,4 @@ services:
 volumes:
   pgdata:
   redisdata:
+  offline-packs:

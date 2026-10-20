@@ -487,8 +487,22 @@ POST /api/guidebooks/generate
           "type": "activity",
           "place": { "name": "浅草寺", "lat": 35.7148, "lng": 139.7967 },
           "resourceSlotId": null,
-          "source": "知识库：近半年游记 3 篇；建议清晨前往避开人流",
+          "resource": null,
+          "source": "知识库：近半年游记 3 篇；建议清晨前往避开人流 [K1]",
           "dataFreshness": "2026-10-12T09:00:00Z",
+          "openingHours": "Mo-Su 09:00-17:00",
+          "openingHoursSource": "OSM",
+          "citations": [
+            {
+              "code": "K1",
+              "type": "guide",
+              "title": "浅草寺参拜指南",
+              "sourceName": "达人攻略",
+              "sourceUrl": "https://example.com/post/1",
+              "publishedAt": "2026-09-01",
+              "summary": "清晨人少，建议 8 点前到达"
+            }
+          ],
           "note": ""
         }
       ]
@@ -505,12 +519,30 @@ POST /api/guidebooks/generate
   "packingList": [],
   "culturalTips": [],
   "pitfallTips": [],
+  "travelData": {
+    "fetchedAt": "2026-10-12T09:00:00",
+    "blocks": [
+      { "source": "weather", "status": "ok", "summary": "11-01 晴 12~20℃", "data": {}, "fetchedAt": "2026-10-12T09:00:00" },
+      { "source": "flight_price", "status": "unavailable", "fetchedAt": "2026-10-12T09:00:00" }
+    ]
+  },
+  "travelDataAt": "2026-10-12T09:00:00",
   "disclaimer": "AI 生成，请核实",
-  "degradedMode": false
+  "degradedMode": false,
+  "degradationReasons": []
 }
 ```
 
-`status` 枚举：`generating` / `failed` / `draft` / `confirmed` / `executing` / `completed`。
+`status` 枚举：`generating` / `failed` / `draft` / `editing` / `confirmed` / `executing` / `completed`。
+
+扩展字段说明（FR-6 / FR-7 / FR-8）：
+
+| 字段 | 说明 |
+|---|---|
+| `travelData` | 实时数据快照，`blocks[].status` 为 `ok` / `unavailable`；`unavailable` 时前端显示“时效未知”，不得补默认值 |
+| `openingHours` / `openingHoursSource` | OSM 营业时间原始字符串与来源；未查到为 `null` |
+| `citations` | 结构化溯源引用；`code` 对应生成时的 `[K1]` 编号，`general` 类型表示通用知识 |
+| `resource` | 按 `resourceSlotId` 解析出的资源对象（含签名 `bookingLink`）；未绑定为 `null` |
 
 ### 5.3 重试生成
 
@@ -685,6 +717,8 @@ POST /api/guidebooks/generate
 
 ## 6. 多方案对比与混搭（FR-4，L2）
 
+> 本期偏差：不强制 `L2`，所有登录用户可用；服务层保留 `UserLevelPolicy` 作为唯一开关。
+
 ### 6.1 生成对比方案
 
 **POST** `/api/guidebooks/compare`
@@ -704,16 +738,45 @@ POST /api/guidebooks/generate
 {
   "comparisonId": "c60001",
   "guidebooks": [
-    { "guidebookId": "g50002", "variant": "budget", "totalBudget": { "min": 10000, "max": 12000 } },
-    { "guidebookId": "g50003", "variant": "balanced", "totalBudget": { "min": 14000, "max": 16000 } },
-    { "guidebookId": "g50004", "variant": "luxury", "totalBudget": { "min": 20000, "max": 24000 } }
+    { "guidebookId": "g50002", "variant": "budget", "totalBudget": null },
+    { "guidebookId": "g50003", "variant": "balanced", "totalBudget": null },
+    { "guidebookId": "g50004", "variant": "luxury", "totalBudget": null }
   ]
 }
 ```
 
+- `variants` 可选 `budget` / `balanced` / `luxury`，去重后 2–3 套；为空默认三套。
+- 一次对比只扣 1 次每日生成配额；重复提交由 Redis 锁拦截（42900）。
+- 方案异步顺序生成，`totalBudget` 在生成完成后才有值。
+
 ### 6.2 获取对比详情
 
 **GET** `/api/guidebooks/compare/{comparisonId}`
+
+响应 `data`：
+
+```json
+{
+  "comparisonId": "c60001",
+  "baseGuidebookId": "g50001",
+  "status": "completed",
+  "errorMessage": null,
+  "variants": [
+    {
+      "guidebookId": "g50002",
+      "variant": "budget",
+      "status": "draft",
+      "progress": 100,
+      "title": "省钱东京",
+      "totalBudget": { "min": 10000, "max": 12000 },
+      "dayCount": 7,
+      "highlights": ["浅草寺", "上野公园"]
+    }
+  ]
+}
+```
+
+`status` 枚举：`processing` / `completed` / `partial` / `failed`。前端每 2 秒轮询，不用逐套猜测状态。
 
 ### 6.3 混搭生成
 
@@ -740,7 +803,10 @@ POST /api/guidebooks/generate
 }
 ```
 
-> 若存在时段/地理冲突，`conflicts` 返回冲突详情，状态为 `blocked`，需用户解决后重新提交。
+- `picks` 去重后最多 30 个；所选节点必须属于该对比任务。
+- 生成时复制所选节点并重新生成 `nodeId`，再调用模型重平衡；模型失败时保留所选节点并返回 `degradedMode=true`（详见 §5.2），不使用模板替换。
+- 若存在时段/地理冲突，`conflicts` 返回冲突详情，`status` 为 `blocked`，**不落库**，需用户调整后重新提交。
+- 成功时新建独立攻略：`variant=mixed`、`sessionId=null`、`comparisonId` 保留，后续编辑/版本/确认走 FR-5 链路。
 
 ---
 
@@ -893,13 +959,24 @@ POST /api/guidebooks/generate
 { "resourceSlotId": "r70001" }
 ```
 
+响应 `data`：`{ guidebookId, version, changeSummary, conflicts }`。
+
+- 走与手动编辑相同的保存路径：版本 +1、追加 `manual` 快照、状态 `draft → editing`。
+- `resourceSlotId` 为 `null` 表示解绑（契约扩展）。
+- 资源不存在/已下架：40400；`sold_out` / `link_error` 不可绑定：40900；非所有者：40301。
+
 ### 8.3 获取转链（点击跳转）
 
 **GET** `/api/link/click?rid={resourceSlotId}&sig={signature}`
 
 说明：302 跳转到合作方页面，带联盟追踪参数。跳转前展示中转页提示「即将离开本站」（合规）。
 
-响应：`302 Found`，`Location: <合作方 URL>`
+响应：`302 Found`，`Location: <合作方 URL>`（已追加 `affiliate_params` 的联盟参数）
+
+- 签名错误：40301
+- 资源不存在或已下架：40400
+- 当前不可跳转（售罄 / 失效 / URL 非法）：40900
+- 只允许跳转到资源目录中的 `target_url`，不接受任何用户传入的 URL。
 
 ### 8.4 校验转链有效性
 
@@ -940,10 +1017,14 @@ POST /api/guidebooks/generate
 
 ```json
 {
-  "taskId": "op80001",
+  "taskId": 80001,
   "status": "processing"
 }
 ```
+
+- `format` 为 `pdf` / `html`，缺省 `pdf`；`includeMaps` 缺省 `true`。
+- 仅所有者可创建；攻略状态允许 `draft` / `editing` / `confirmed` / `executing`，`generating` / `failed` 返回 40900。
+- 同攻略 + 同版本 + 同格式的未过期 `processing` / `completed` 任务直接复用，返回原 `taskId`。
 
 ### 9.2 查询离线包状态
 
@@ -953,20 +1034,30 @@ POST /api/guidebooks/generate
 
 ```json
 {
-  "taskId": "op80001",
+  "taskId": 80001,
   "status": "completed",
-  "downloadUrl": "/api/offline-packs/op80001/download",
-  "expiresAt": "2026-11-01T00:00:00Z"
+  "downloadUrl": "/api/offline-packs/80001/download",
+  "expiresAt": "2026-11-01T00:00:00",
+  "errorMessage": null
 }
 ```
 
 `status` 枚举：`processing` / `completed` / `failed`。
+`errorMessage` 为扩展字段：`failed` 时说明原因（超时、过期、文件丢失等）。
+`processing` 时 `downloadUrl` 为 null；任务 72 小时后过期，过期后状态变为 `failed` 且文件被删除。
 
 ### 9.3 下载离线包
 
 **GET** `/api/offline-packs/{taskId}/download`
 
-响应：文件流（`application/pdf` 或 `text/html`）。
+响应：文件流（`application/pdf` 或 `text/html`），
+`Content-Disposition` 同时给出 ASCII 文件名与 RFC 5987 中文名（`filename*`）。
+
+- 未完成或已过期：40900
+- 非所有者：40301
+- 任务不存在：40400
+
+下载接口需要 `Authorization`，前端必须用带 token 的 blob 请求，不能使用裸 `<a href>`。
 
 ---
 
@@ -1220,9 +1311,13 @@ POST /api/guidebooks/generate
 
 ## 14. 运营与知识库（运营角色）
 
+> 权限：`AdminGuard` 最小实现——用户等级为 `L3`，或用户 ID 命中配置 `app.admin.user-ids`（环境变量 `ADMIN_USER_IDS`，逗号分隔）。不满足返回 40300。
+
 ### 14.1 知识库列表
 
-**GET** `/api/admin/knowledge?page=1&pageSize=20`
+**GET** `/api/admin/knowledge?status=approved&page=1&pageSize=20`
+
+`status` 可选 `pending` / `approved` / `rejected`；不传返回全部。列表项含 `id` / `destination` / `docType` / `title` / `content` / `tags` / `sourceName` / `sourceUrl` / `status` / `sourceType` / `sourceRefId` / `createdAt`。
 
 ### 14.2 新增知识条目
 
@@ -1232,12 +1327,17 @@ POST /api/guidebooks/generate
 
 ```json
 {
-  "type": "guide",
   "destination": "东京",
+  "docType": "guide",
+  "title": "东京赏樱路线",
   "content": "...",
-  "source": "达人攻略 pg11001"
+  "tags": ["樱花", "路线"],
+  "sourceName": "运营整理",
+  "sourceUrl": "https://example.com/source"
 }
 ```
+
+`destination` / `title` / `content` 必填；新增条目直接为 `approved`，立即进入检索池。
 
 ### 14.3 审核达人发布攻略
 
@@ -1248,6 +1348,8 @@ POST /api/guidebooks/generate
 ```json
 { "approved": true, "comment": "" }
 ```
+
+响应 `data`：`{ postId, reviewStatus, knowledgeDocId }`。通过时写入/更新 `t_knowledge_doc`（`sourceType=guide`、`sourceRefId=postId` 幂等）并使其可被检索；驳回只更新状态，已入库条目转为 `rejected` 并退出检索池。
 
 ### 14.4 数据源配置
 
@@ -1263,9 +1365,13 @@ POST /api/guidebooks/generate
 }
 ```
 
+`sourceId` 为 `weather` / `exchange` / `local_news` / `visa` / `flight_price` / `hotel_price`；`enabled=false` 时该源不采集，生成时的对应块标为 `unavailable`。
+
 ### 14.5 实时数据查询（内部）
 
 **GET** `/api/admin/data/weather?destination=东京&date=2026-11-01`
+
+复用天气 provider；未配置或外部源失败时返回不可用标记，不返回编造值。
 
 ---
 
@@ -1377,8 +1483,8 @@ POST /api/guidebooks/generate
 | FR-3 生成 | §5 | `/api/guidebooks/generate`, `/api/guidebooks/{id}` |
 | FR-4 对比 | §6 | `/api/guidebooks/compare*` |
 | FR-5 编辑 | §7 | `/api/guidebooks/{id}/days/*`, `/api/guidebooks/{id}/adjust` |
-| FR-6 实时数据 | §14.5（内部） | `/api/admin/data/*` |
-| FR-7 知识库 | §14.1-14.3 | `/api/admin/knowledge*` |
+| FR-6 实时数据 | §14.5（内部）+ §5.2 快照 | `/api/admin/data/*`、`travelData` |
+| FR-7 知识库 | §14.1-14.3 + §5.2 引用 | `/api/admin/knowledge*`、节点 `citations` |
 | FR-8 转链 | §8 | `/api/resources`, `/api/link/*` |
 | FR-9 离线包 | §9 | `/api/guidebooks/{id}/offline-pack` |
 | FR-10 行程伴侣 | §10 | `/api/trip-companion/*` |
@@ -1397,3 +1503,4 @@ POST /api/guidebooks/generate
 - 本文件为接口契约定义，不包含服务实现细节；鉴权、限流、幂等、并发控制在实现层处理。
 - 涉及 AI 生成的接口需按 PRD §7.7 降级链处理，返回体通过 `degradedMode` 字段标识是否降级。
 - 转链相关接口（§8.3、§8.4）涉及资金流向合作方，平台不经手，需按合规要求做跳转提示。
+- 本期实现偏差（详见 `README.md` 的“与 PRD 的偏差”）：FR-4 未强制 L2；FR-7 仅关键词检索、未接 Milvus；FR-8 使用演示资源目录；FR-9 静态地图为尽力而为。
