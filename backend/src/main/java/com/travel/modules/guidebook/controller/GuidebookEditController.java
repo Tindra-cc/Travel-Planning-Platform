@@ -11,8 +11,10 @@ import org.springframework.web.bind.annotation.RestController;
 import com.travel.common.Result;
 import com.travel.modules.guidebook.dto.AddNodeRequest;
 import com.travel.modules.guidebook.dto.GuidebookEditResponse;
+import com.travel.modules.guidebook.dto.GuidebookValidateResponse;
 import com.travel.modules.guidebook.dto.MoveNodeRequest;
 import com.travel.modules.guidebook.dto.UpdateNodeRequest;
+import com.travel.modules.guidebook.service.GuidebookConflictService;
 import com.travel.modules.guidebook.service.GuidebookEditService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,9 +28,10 @@ import lombok.RequiredArgsConstructor;
 public class GuidebookEditController {
 
     private final GuidebookEditService editService;
+    private final GuidebookConflictService conflictService;
 
     /**
-     * 编辑节点（§7.1）：只覆盖传入的时段 / 地点 / 备注。
+     * 编辑节点：只覆盖传入的时段 / 地点 / 备注。
      */
     @Operation(summary = "编辑节点")
     @PutMapping("/{guidebookId}/days/{day}/nodes/{nodeId}")
@@ -41,7 +44,7 @@ public class GuidebookEditController {
     }
 
     /**
-     * 新增节点（§7.2）：index 为空时追加到当天末尾。
+     * 新增节点：index 为空时追加到当天末尾。
      */
     @Operation(summary = "新增节点")
     @PostMapping("/{guidebookId}/days/{day}/nodes")
@@ -53,7 +56,7 @@ public class GuidebookEditController {
     }
 
     /**
-     * 删除节点（§7.3）。
+     * 删除节点
      */
     @Operation(summary = "删除节点")
     @DeleteMapping("/{guidebookId}/days/{day}/nodes/{nodeId}")
@@ -65,7 +68,7 @@ public class GuidebookEditController {
     }
 
     /**
-     * 移动节点（§7.4）：支持同一天换位与跨天移动。
+     * 移动节点：支持同一天换位与跨天移动。
      */
     @Operation(summary = "移动节点")
     @PostMapping("/{guidebookId}/nodes/{nodeId}/move")
@@ -74,5 +77,16 @@ public class GuidebookEditController {
             @PathVariable String nodeId,
             @RequestBody MoveNodeRequest req) {
         return Result.success(editService.moveNode(guidebookId, nodeId, req));
+    }
+
+    /**
+     * 
+     * @param guidebookId
+     * @return
+     */
+    @Operation(summary = "节点冲突检测")
+    @PostMapping("/{guidebookId}/validate")
+    public Result<GuidebookValidateResponse> validate(@PathVariable  Long guidebookId){
+        return Result.success(conflictService.validate(guidebookId));
     }
 }

@@ -17,7 +17,9 @@ import com.travel.modules.guidebook.dto.GuidebookDayDto;
 import com.travel.modules.guidebook.dto.GuidebookEditResponse;
 import com.travel.modules.guidebook.dto.GuidebookNodeDto;
 import com.travel.modules.guidebook.dto.MoveNodeRequest;
+import com.travel.modules.guidebook.dto.NodeConflictDto;
 import com.travel.modules.guidebook.dto.UpdateNodeRequest;
+import com.travel.modules.guidebook.edit.ConflictDetector;
 import com.travel.modules.guidebook.entity.Guidebook;
 import com.travel.modules.guidebook.entity.GuidebookVersion;
 import com.travel.modules.guidebook.mapper.GuidebookMapper;
@@ -39,6 +41,7 @@ public class GuidebookEditService {
     
     private final GuidebookMapper guidebookMapper;
     private final GuidebookVersionService versionService;
+    private final ConflictDetector conflictDetector = new ConflictDetector();
 
     /**
      *编辑节点
@@ -187,7 +190,9 @@ public class GuidebookEditService {
         }
         versionService.append(guidebook, GuidebookVersion.CHANGE_TYPE_MANUAL, summary, UserContext.getUserId());
 
-        return  new GuidebookEditResponse(guidebook.getId(),guidebook.getVersion(),summary,List.of());
+        List<NodeConflictDto> conflicts = conflictDetector.detect(guidebook);
+
+        return  new GuidebookEditResponse(guidebook.getId(),guidebook.getVersion(),summary,conflicts);
     }
 
     /**
