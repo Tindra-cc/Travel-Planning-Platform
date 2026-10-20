@@ -154,12 +154,36 @@ JSONB 写入依赖 JDBC 连接串上的 `?stringtype=unspecified`，请勿移除
 
 FR-3 攻略生成已交付：对话确认 → 异步流水线 → 进度推送 → `/guidebook/:guidebookId` 三态页面（生成中 / 失败重试 / 草稿），支持日程、预算、贴士与溯源展示，以及 Markdown/HTML 导出。
 
+FR-5 攻略编辑已交付：`draft / editing` 状态下支持节点编辑、新增、删除、跨天移动与同日拖拽排序；支持对话式 AI 调整（失败不落库、Redis 编辑锁防并发）；服务端确定性冲突检测（时段重叠 / 地理不可达 / 预算超限）；版本历史只追加、回溯生成新版本；确认前复检冲突，存在冲突时返回 `42200`。会话页在绑定 `draft / editing` 攻略时可进入显式调整模式，调整指令与结果只做本地展示，不写入会话消息表。
+
+## 测试
+
+| 层 | 外部依赖 | 命令 |
+|---|---|---|
+| 后端单元测试（服务层 / 工具类） | 无 | `cd backend && mvn -B test` |
+| 后端 MVC 契约测试（standalone MockMvc） | 无 | 同上 |
+| 后端集成测试（`@Tag("integration")`） | PostgreSQL + Redis | `cd backend && docker compose up -d postgres redis && mvn -B -Pintegration test` |
+| 前端单测（Vitest + jsdom） | 无 | `cd frontend && npm run test:unit -- --run` |
+
+默认 `mvn test` 通过 Surefire `excludedGroups=integration` 排除上下文启动类，**无需任何外部服务即可全绿**；只有显式指定 `-Pintegration` 才会运行 `TravelApiApplicationTests` 与 `GuidebookGenerationE2ETest`。
+
+验收标准映射（US-01–US-05）：
+
+| 用户故事 | 后端 | 前端 |
+|---|---|---|
+| US-01 账号访问 | `AuthServiceTest`、`LoginAttemptGuardTest`、`AuthControllerTest` | `LoginView.spec.ts` |
+| US-02 旅行画像 | `ProfileServiceTest`、`ProfileControllerTest` | — |
+| US-03 对话意图 | `IntentServiceTest`、`ChatServiceTest`、`ChatControllerTest` | `ChatView.spec.ts` |
+| US-04 推荐攻略 | — | `DiscoverView.spec.ts` |
+| US-05 攻略生成 | `GuidebookServiceTest`、`GuidebookControllerTest`、`GenerationPipelineTest`、`GuidebookGenerationRunnerTest`、`GenerationRecoveryListenerTest`、`TravelDataServiceTest`、`KnowledgeServiceTest`、`GuidebookGenerationE2ETest`（integration） | `GuidebookView.spec.ts`、`guidebookWs.spec.ts` |
+| FR-5 攻略编辑 | `GuidebookEditServiceTest`、`GuidebookAdjustServiceTest`、`GuidebookHistoryServiceTest`、`GuidebookConfirmServiceTest`、`GuidebookConflictServiceTest`、`ConflictDetectorTest`、`GuidebookEditControllerTest`、`GuidebookVersionControllerTest`、`ChatServiceTest`、`ChatControllerTest` | `GuidebookView.spec.ts`、`ChatView.spec.ts` |
+
 ## 常用命令
 
 ```bash
-# 后端编译 / 测试
-cd backend && mvn -DskipTests compile && mvn test
+# 后端编译
+cd backend && mvn -DskipTests compile
 
-# 前端类型检查 / 单测 / 构建
-cd frontend && npm run type-check && npm run test:unit -- --run && npm run build
+# 前端类型检查 / 构建
+cd frontend && npm run type-check && npm run build
 ```

@@ -76,6 +76,7 @@ public class ChatService {
         SessionDetailResponse resp = new SessionDetailResponse();
         resp.setSessionId(session.getId());
         resp.setStatus(session.getStatus());
+        resp.setGuidebookId(session.getGuidebookId());
         resp.setIntent(session.getIntent());
         resp.setPendingQuestions(session.getPendingQuestions());
         resp.setMessages(loadMessages(sessionId));

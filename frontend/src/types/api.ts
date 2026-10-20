@@ -138,6 +138,7 @@ export interface SessionResponse {
 export interface SessionDetail {
   sessionId: string
   status: string
+  guidebookId: string | null
   intent: Record<string, unknown> | null
   pendingQuestions: PendingQuestion[]
   messages: ChatMessage[]

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createRouter, createMemoryHistory, type Router } from 'vue-router'
 import ElementPlus, { ElMessageBox } from 'element-plus'
+import { VueDraggable } from 'vue-draggable-plus'
 import GuidebookView from '@/views/GuidebookView.vue'
 import * as guidebookApi from '@/api/guidebook'
 import { openGuidebookSocket } from '@/utils/guidebookWs'
@@ -34,6 +35,7 @@ const mockedAdjust = vi.mocked(guidebookApi.adjustGuidebook)
 const mockedVersions = vi.mocked(guidebookApi.listGuidebookVersions)
 const mockedRestore = vi.mocked(guidebookApi.restoreGuidebookVersion)
 const mockedAddNode = vi.mocked(guidebookApi.addGuidebookNode)
+const mockedMoveNode = vi.mocked(guidebookApi.moveGuidebookNode)
 
 function detail(overrides: Partial<GuidebookDetail>): GuidebookDetail {
   return {
@@ -94,6 +96,7 @@ describe('GuidebookView', () => {
     mockedVersions.mockReset()
     mockedRestore.mockReset()
     mockedAddNode.mockReset()
+    mockedMoveNode.mockReset()
   })
 
   afterEach(() => {
@@ -354,6 +357,56 @@ describe('GuidebookView', () => {
         timeSlot: { start: '09:00', end: '10:00' }
       })
     )
+    wrapper.unmount()
+  })
+
+  it('同日拖拽结束后调用移动接口并刷新', async () => {
+    mockedGet.mockResolvedValue(
+      detail({
+        days: [
+          {
+            day: 1,
+            nodes: [
+              {
+                nodeId: 'n1',
+                timeSlot: { start: '09:00', end: '10:00' },
+                type: 'activity',
+                place: { name: '宽窄巷子' },
+                source: null,
+                dataFreshness: null,
+                note: null
+              },
+              {
+                nodeId: 'n2',
+                timeSlot: { start: '11:00', end: '12:00' },
+                type: 'meal',
+                place: { name: '火锅店' },
+                source: null,
+                dataFreshness: null,
+                note: null
+              }
+            ]
+          }
+        ]
+      })
+    )
+    mockedMoveNode.mockResolvedValue({
+      guidebookId: '1',
+      version: 2,
+      changeSummary: '移动节点',
+      conflicts: []
+    })
+
+    const { wrapper } = await mountAt()
+
+    wrapper.findComponent(VueDraggable).vm.$emit('end', { oldIndex: 0, newIndex: 1 })
+    await flushPromises()
+
+    expect(mockedMoveNode).toHaveBeenCalledWith('1', 'n2', {
+      targetDay: 1,
+      targetIndex: 1
+    })
+    expect(mockedGet.mock.calls.length).toBeGreaterThanOrEqual(2)
     wrapper.unmount()
   })
 

@@ -109,13 +109,15 @@ class ChatControllerTest {
         SessionDetailResponse response = new SessionDetailResponse();
         response.setSessionId(11L);
         response.setStatus("ready_to_generate");
+        response.setGuidebookId(5L);
         response.setMessages(List.of());
         when(chatService.getSession(11L)).thenReturn(response);
 
         mvc.perform(get("/api/chat/sessions/11"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data.sessionId").value(11));
+                .andExpect(jsonPath("$.data.sessionId").value(11))
+                .andExpect(jsonPath("$.data.guidebookId").value(5));
     }
 
     @Test

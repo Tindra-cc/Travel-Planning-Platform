@@ -167,7 +167,9 @@ class ChatServiceTest {
 
     @Test
     void getSessionReturnsIntentAndMessages() {
-        when(sessionMapper.selectById(SESSION_ID)).thenReturn(session(ChatSession.STATUS_READY));
+        ChatSession session = session(ChatSession.STATUS_READY);
+        session.setGuidebookId(55L);
+        when(sessionMapper.selectById(SESSION_ID)).thenReturn(session);
         ChatMessage message = new ChatMessage();
         message.setId(1L);
         message.setRole(ChatMessage.ROLE_USER);
@@ -177,6 +179,7 @@ class ChatServiceTest {
         SessionDetailResponse response = service.getSession(SESSION_ID);
 
         assertThat(response.getStatus()).isEqualTo(ChatSession.STATUS_READY);
+        assertThat(response.getGuidebookId()).isEqualTo(55L);
         assertThat(response.getIntent()).isNotNull();
         assertThat(response.getMessages()).extracting(ChatMessageDto::getContent)
                 .containsExactly("去成都");

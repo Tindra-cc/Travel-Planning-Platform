@@ -56,6 +56,7 @@
         <el-tag :type="statusType(currentStatus)" effect="light" round>
           {{ statusLabel(currentStatus) }}
         </el-tag>
+        <el-tag v-if="adjustMode" type="warning" effect="dark" round>攻略调整模式</el-tag>
         <el-button
           v-if="currentStatus === 'ready_to_generate'"
           type="success"
@@ -64,6 +65,18 @@
           @click="onConfirm"
         >
           确认生成攻略
+        </el-button>
+        <el-button
+          v-if="canAdjust"
+          size="small"
+          :type="adjustMode ? 'warning' : 'primary'"
+          :plain="adjustMode"
+          @click="toggleAdjustMode"
+        >
+          {{ adjustMode ? '退出调整' : '调整当前攻略' }}
+        </el-button>
+        <el-button v-if="sessionGuidebookId" size="small" text @click="goGuidebook">
+          查看攻略
         </el-button>
       </div>
 
@@ -74,16 +87,20 @@
           :rows="2"
           resize="none"
           :disabled="currentStatus === 'generating'"
-          placeholder="描述你的旅行需求，回车发送"
+          :placeholder="
+            adjustMode
+              ? '描述想怎么调整攻略，例如：Day2 太赶了，把博物馆挪到第三天'
+              : '描述你的旅行需求，回车发送'
+          "
           @keyup.enter.exact="onSend"
         />
         <el-button
           type="primary"
-          :loading="sending"
+          :loading="sending || adjusting"
           :disabled="currentStatus === 'generating'"
           @click="onSend"
         >
-          发送
+          {{ adjustMode ? '执行调整' : '发送' }}
         </el-button>
       </div>
     </el-card>
@@ -91,10 +108,11 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as chatApi from '@/api/chat'
+import * as guidebookApi from '@/api/guidebook'
 import { openChatSocket, type MessageDelta } from '@/utils/ws'
 import type { ChatMessage, PendingQuestion, SessionListItem } from '@/types/api'
 
@@ -127,6 +145,19 @@ const input = ref('')
 const sending = ref(false)
 const confirming = ref(false)
 const scrollRef = ref<HTMLElement>()
+
+// 攻略调整是独立的显式模式：请求走 HTTP，结果只做本地展示，不写入会话消息表
+const sessionGuidebookId = ref<string | null>(null)
+const guidebookStatus = ref('')
+const adjustMode = ref(false)
+const adjusting = ref(false)
+const canAdjust = computed(
+  () =>
+    !!sessionGuidebookId.value &&
+    ['draft', 'editing'].includes(guidebookStatus.value) &&
+    currentStatus.value !== 'generating'
+)
+
 let socket: WebSocket | null = null
 
 async function loadSessions() {
@@ -147,6 +178,9 @@ function startNew() {
   messages.value = []
   pendingQuestions.value = []
   input.value = ''
+  sessionGuidebookId.value = null
+  guidebookStatus.value = ''
+  adjustMode.value = false
 }
 
 async function selectSession(id: string) {
@@ -157,10 +191,41 @@ async function selectSession(id: string) {
     currentStatus.value = detail.status
     messages.value = detail.messages
     pendingQuestions.value = detail.pendingQuestions ?? []
+    sessionGuidebookId.value = detail.guidebookId ?? null
+    guidebookStatus.value = ''
+    adjustMode.value = false
+    if (sessionGuidebookId.value) {
+      void loadGuidebookStatus(sessionGuidebookId.value)
+    }
     scrollToBottom()
   } catch {
     // 拦截器已提示
   }
+}
+
+async function loadGuidebookStatus(id: string) {
+  try {
+    const guidebook = await guidebookApi.getGuidebook(id)
+    if (sessionGuidebookId.value === id) {
+      guidebookStatus.value = guidebook.status
+    }
+  } catch {
+    // 攻略不可读时隐藏调整入口
+  }
+}
+
+function toggleAdjustMode() {
+  adjustMode.value = !adjustMode.value
+  input.value = ''
+}
+
+function goGuidebook() {
+  if (!sessionGuidebookId.value) return
+  router.push({
+    name: 'guidebook-detail',
+    params: { guidebookId: sessionGuidebookId.value },
+    query: sessionId.value ? { sessionId: sessionId.value } : {}
+  })
 }
 
 // 从推荐卡片跳转过来时，用目的地/时长预填首句；从攻略页带 sessionId 回来时直接打开该会话
@@ -184,6 +249,10 @@ function applyContextFromQuery() {
 async function onSend() {
   const content = input.value.trim()
   if (!content) return
+  if (adjustMode.value) {
+    await sendAdjust(content)
+    return
+  }
   sending.value = true
   try {
     if (!sessionId.value) {
@@ -196,6 +265,39 @@ async function onSend() {
     // 拦截器已提示
   } finally {
     sending.value = false
+  }
+}
+
+async function sendAdjust(content: string) {
+  const guidebookId = sessionGuidebookId.value
+  if (!guidebookId) return
+  adjusting.value = true
+  try {
+    const res = await guidebookApi.adjustGuidebook(guidebookId, content)
+    messages.value.push({
+      messageId: `local-adjust-user-${Date.now()}`,
+      role: 'user',
+      content,
+      createdAt: new Date().toISOString()
+    })
+    messages.value.push({
+      messageId: `local-adjust-${res.version}`,
+      role: 'assistant',
+      content: `已按你的要求调整攻略（v${res.version}）：${res.changeSummary}`,
+      createdAt: new Date().toISOString()
+    })
+    input.value = ''
+    guidebookStatus.value = 'editing'
+    if (res.conflicts?.length) {
+      ElMessage.warning(`调整完成，但仍有 ${res.conflicts.length} 处冲突需要处理`)
+    } else {
+      ElMessage.success('攻略已更新')
+    }
+    scrollToBottom()
+  } catch {
+    // 拦截器已提示
+  } finally {
+    adjusting.value = false
   }
 }
 

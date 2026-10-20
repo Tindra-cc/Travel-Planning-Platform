@@ -4,7 +4,8 @@ import { createRouter, createMemoryHistory } from 'vue-router'
 import ElementPlus from 'element-plus'
 import ChatView from '@/views/ChatView.vue'
 import * as chatApi from '@/api/chat'
-import type { SessionDetail, SessionListItem } from '@/types/api'
+import * as guidebookApi from '@/api/guidebook'
+import type { GuidebookDetail, SessionDetail, SessionListItem } from '@/types/api'
 
 vi.mock('@/api/chat', () => ({
   listSessions: vi.fn(),
@@ -15,6 +16,11 @@ vi.mock('@/api/chat', () => ({
   deleteSession: vi.fn()
 }))
 
+vi.mock('@/api/guidebook', () => ({
+  getGuidebook: vi.fn(),
+  adjustGuidebook: vi.fn()
+}))
+
 vi.mock('@/utils/ws', () => ({
   openChatSocket: vi.fn(() => ({ close: vi.fn(), send: vi.fn(), readyState: 3 }))
 }))
@@ -23,6 +29,8 @@ const mockedList = vi.mocked(chatApi.listSessions)
 const mockedCreate = vi.mocked(chatApi.createSession)
 const mockedGet = vi.mocked(chatApi.getSession)
 const mockedConfirm = vi.mocked(chatApi.confirmSession)
+const mockedGetGuidebook = vi.mocked(guidebookApi.getGuidebook)
+const mockedAdjust = vi.mocked(guidebookApi.adjustGuidebook)
 
 const session: SessionListItem = {
   sessionId: '11',
@@ -35,6 +43,7 @@ function detail(overrides: Partial<SessionDetail> = {}): SessionDetail {
   return {
     sessionId: '11',
     status: 'ready_to_generate',
+    guidebookId: null,
     intent: null,
     pendingQuestions: [],
     messages: [],
@@ -67,6 +76,8 @@ describe('ChatView', () => {
     mockedCreate.mockReset()
     mockedGet.mockReset()
     mockedConfirm.mockReset()
+    mockedGetGuidebook.mockReset()
+    mockedAdjust.mockReset()
     mockedList.mockResolvedValue({ list: [], page: 1, pageSize: 50, total: 0 })
   })
 
@@ -160,6 +171,68 @@ describe('ChatView', () => {
     expect(mockedCreate).toHaveBeenCalledWith('去成都')
     expect(wrapper.text()).toContain('想去哪个目的地？')
     expect((wrapper.find('textarea').element as HTMLTextAreaElement).value).toBe('')
+    wrapper.unmount()
+  })
+
+  it('绑定可编辑攻略时展示调整入口，调整结果只做本地展示', async () => {
+    mockedList.mockResolvedValue({ list: [session], page: 1, pageSize: 50, total: 1 })
+    mockedGet.mockResolvedValue(
+      detail({ status: 'generated', guidebookId: '5' })
+    )
+    mockedGetGuidebook.mockResolvedValue({ guidebookId: '5', status: 'draft' } as GuidebookDetail)
+    mockedAdjust.mockResolvedValue({
+      guidebookId: '5',
+      version: 2,
+      changeSummary: '把博物馆挪到 Day3',
+      conflicts: [],
+      changes: []
+    })
+    const { wrapper } = await mountView()
+
+    await wrapper.find('.session-list li').trigger('click')
+    await flushPromises()
+
+    expect(mockedGetGuidebook).toHaveBeenCalledWith('5')
+    const adjustEntry = wrapper
+      .findAll('button')
+      .find((b) => b.text().includes('调整当前攻略'))
+    expect(adjustEntry).toBeTruthy()
+
+    await adjustEntry!.trigger('click')
+    await wrapper.find('textarea').setValue('博物馆挪到第三天')
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text().includes('执行调整'))!
+      .trigger('click')
+    await flushPromises()
+
+    expect(mockedAdjust).toHaveBeenCalledWith('5', '博物馆挪到第三天')
+    expect(wrapper.text()).toContain('已按你的要求调整攻略（v2）：把博物馆挪到 Day3')
+    expect(mockedCreate).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('已确认攻略不展示调整入口但可跳转查看', async () => {
+    mockedList.mockResolvedValue({ list: [session], page: 1, pageSize: 50, total: 1 })
+    mockedGet.mockResolvedValue(
+      detail({ status: 'generated', guidebookId: '5' })
+    )
+    mockedGetGuidebook.mockResolvedValue({
+      guidebookId: '5',
+      status: 'confirmed'
+    } as GuidebookDetail)
+    const { wrapper, router } = await mountView()
+
+    await wrapper.find('.session-list li').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('调整当前攻略')
+    const viewButton = wrapper.findAll('button').find((b) => b.text().includes('查看攻略'))
+    expect(viewButton).toBeTruthy()
+
+    await viewButton!.trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/guidebook/5')
     wrapper.unmount()
   })
 })
