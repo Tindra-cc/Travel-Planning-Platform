@@ -1,0 +1,7 @@
+# 本地生成物与 AI 辅助资料，不纳入版本库
+*.zip
+.claude/
+docs/
+Sprint1-review.md
+sprint1-c4.html
+frontend/src/views/SprintReviewDemo.vue
