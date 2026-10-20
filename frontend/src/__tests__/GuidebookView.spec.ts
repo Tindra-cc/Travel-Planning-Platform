@@ -131,6 +131,62 @@ describe('GuidebookView', () => {
     wrapper.unmount()
   })
 
+  it('已确认状态展示行程且不轮询', async () => {
+    const intervalSpy = vi.spyOn(window, 'setInterval')
+    mockedGet.mockResolvedValue(
+      detail({
+        status: 'confirmed',
+        title: '成都三日',
+        progress: 100,
+        days: [{ day: 1, nodes: [] }]
+      })
+    )
+
+    const { wrapper } = await mountAt()
+
+    expect(wrapper.text()).toContain('已确认')
+    expect(intervalSpy.mock.calls.some((call) => call[1] === 2000)).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('导出按钮调用导出接口并传递格式', async () => {
+    mockedGet.mockResolvedValue(
+      detail({
+        title: '成都三日',
+        days: [{ day: 1, nodes: [] }]
+      })
+    )
+    vi.mocked(guidebookApi.exportGuidebook).mockResolvedValue({
+      format: 'markdown',
+      filename: 'guidebook-1.md',
+      content: '# 成都三日'
+    })
+    if (typeof URL.createObjectURL !== 'function') {
+      Object.defineProperty(URL, 'createObjectURL', {
+        value: vi.fn(() => 'blob:mock'),
+        configurable: true
+      })
+    }
+    if (typeof URL.revokeObjectURL !== 'function') {
+      Object.defineProperty(URL, 'revokeObjectURL', {
+        value: vi.fn(),
+        configurable: true
+      })
+    }
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock')
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+
+    const { wrapper } = await mountAt()
+
+    const exportButton = wrapper.findAll('button').find((b) => b.text().includes('导出 Markdown'))
+    await exportButton!.trigger('click')
+    await flushPromises()
+
+    expect(guidebookApi.exportGuidebook).toHaveBeenCalledWith('1', 'markdown')
+    wrapper.unmount()
+  })
+
   it('失败态展示错误并可重试', async () => {
     mockedGet.mockResolvedValue(
       detail({ status: 'failed', errorMessage: '服务器重启，生成任务已中断' })

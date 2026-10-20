@@ -8,6 +8,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -27,6 +28,7 @@ import com.travel.modules.guidebook.service.GuidebookService;
  * 无 AI key 的完整链路：触发 → 线程池 → 知识/实时数据 → 模板降级 → draft。
  * 需要本地 PostgreSQL 与 Redis（与 dev 环境一致）。
  */
+@Tag("integration")
 @SpringBootTest(properties = {
         "ai.deepseek.api-key=",
         "ai.dashscope.api-key="
