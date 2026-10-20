@@ -209,12 +209,64 @@ class ConflictDetectorTest {
     // ---- closed_time ----
 
     @Test
-    void neverEmitsClosedTimeInCurrentScope() {
+    void flagsNodeOutsideOpeningHours() {
+        // 2026-11-02 是周一
         Guidebook guidebook = guidebook(List.of(day(1,
-                node("n1", "09:00", "11:00", "周一闭馆的博物馆"))));
+                nodeWithHours("n1", "19:00", "20:00", "博物馆", "Mo-Su 09:00-17:00"))),
+                null, intentWithDates("2026-11-02", "2026-11-03"));
+
+        List<NodeConflictDto> conflicts = detector.detect(guidebook);
+
+        assertThat(conflicts).extracting(NodeConflictDto::getType)
+                .containsExactly(ConflictDetector.TYPE_CLOSED_TIME);
+        assertThat(conflicts.get(0).getNodeIds()).containsExactly("n1");
+        assertThat(conflicts.get(0).getMessage()).contains("博物馆", "营业时间");
+    }
+
+    @Test
+    void allowsNodeInsideOpeningHours() {
+        Guidebook guidebook = guidebook(List.of(day(1,
+                nodeWithHours("n1", "10:00", "12:00", "博物馆", "Mo-Su 09:00-17:00"))),
+                null, intentWithDates("2026-11-02", "2026-11-03"));
+
+        assertThat(detector.detect(guidebook)).isEmpty();
+    }
+
+    @Test
+    void neverFlagsAlwaysOpenPlaces() {
+        Guidebook guidebook = guidebook(List.of(day(1,
+                nodeWithHours("n1", "23:00", "23:59", "便利店", "24/7"))),
+                null, intentWithDates("2026-11-02", "2026-11-03"));
+
+        assertThat(detector.detect(guidebook)).isEmpty();
+    }
+
+    @Test
+    void flagsClosedWeekday() {
+        // 2026-11-07 是周六，规则只覆盖工作日
+        Guidebook guidebook = guidebook(List.of(day(1,
+                nodeWithHours("n1", "10:00", "11:00", "博物馆", "Mo-Fr 09:00-17:00"))),
+                null, intentWithDates("2026-11-07", "2026-11-08"));
 
         assertThat(detector.detect(guidebook)).extracting(NodeConflictDto::getType)
-                .doesNotContain(ConflictDetector.TYPE_CLOSED_TIME);
+                .containsExactly(ConflictDetector.TYPE_CLOSED_TIME);
+    }
+
+    @Test
+    void skipsUnparseableOpeningHours() {
+        Guidebook guidebook = guidebook(List.of(day(1,
+                nodeWithHours("n1", "19:00", "20:00", "公园", "sunrise-sunset"))),
+                null, intentWithDates("2026-11-02", "2026-11-03"));
+
+        assertThat(detector.detect(guidebook)).isEmpty();
+    }
+
+    @Test
+    void skipsOpeningHoursCheckWhenDateIsUnknown() {
+        Guidebook guidebook = guidebook(List.of(day(1,
+                nodeWithHours("n1", "19:00", "20:00", "博物馆", "Mo-Fr 09:00-17:00"))));
+
+        assertThat(detector.detect(guidebook)).isEmpty();
     }
 
     // ---- fixtures ----
@@ -243,7 +295,24 @@ class ConflictDetectorTest {
             Double lat, Double lng) {
         TimeSlotDto slot = start == null && end == null ? null : new TimeSlotDto(start, end);
         return new GuidebookNodeDto(id, slot, "activity",
-                new PlaceDto(name, lat, lng), null, null, null, null);
+                new PlaceDto(name, lat, lng), null, null, null, null, null, null, null, null);
+    }
+
+    private GuidebookNodeDto nodeWithHours(String id, String start, String end, String name,
+            String hours) {
+        GuidebookNodeDto node = node(id, start, end, name);
+        node.setOpeningHours(hours);
+        node.setOpeningHoursSource("OSM");
+        return node;
+    }
+
+    private IntentDto intentWithDates(String start, String end) {
+        IntentDto intent = new IntentDto();
+        IntentDto.DateWindow window = new IntentDto.DateWindow();
+        window.setStart(start);
+        window.setEnd(end);
+        intent.setDateWindow(window);
+        return intent;
     }
 
     private BudgetBreakdownDto budget(String currency, String max) {

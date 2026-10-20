@@ -16,8 +16,8 @@ import com.travel.modules.guidebook.service.GuidebookVersionService;
 
 import lombok.RequiredArgsConstructor;
 
-/** Step 8：把生成结果写回 t_guidebook，状态置为 draft。 */
-@Order(8)
+/** Step 9：把生成结果写回 t_guidebook，状态置为 draft。 */
+@Order(9)
 @Component
 @RequiredArgsConstructor
 public class PersistStep implements GenerationStep {
@@ -47,6 +47,10 @@ public class PersistStep implements GenerationStep {
         guidebook.setPackingList(ctx.getPackingList());
         guidebook.setCulturalTips(ctx.getCulturalTips());
         guidebook.setPitfallTips(ctx.getPitfallTips());
+        if (ctx.getTravelData() != null) {
+            guidebook.setTravelData(ctx.getTravelData());
+            guidebook.setTravelDataAt(LocalDateTime.now());
+        }
         guidebook.setDegradedMode(ctx.degraded());
         guidebook.setDegradationReasons(new ArrayList<>(ctx.getDegradationReasons()));
         guidebook.setCurrentStep("completed");

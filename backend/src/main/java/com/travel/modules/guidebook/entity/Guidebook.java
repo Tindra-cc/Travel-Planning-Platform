@@ -10,6 +10,7 @@ import com.baomidou.mybatisplus.annotation.Version;
 import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import com.travel.common.BaseEntity;
 import com.travel.modules.chat.dto.IntentDto;
+import com.travel.modules.guidebook.data.TravelDataSnapshot;
 import com.travel.modules.guidebook.dto.BudgetBreakdownDto;
 import com.travel.modules.guidebook.dto.GuidebookDayDto;
 
@@ -59,6 +60,11 @@ public class Guidebook extends BaseEntity {
     @TableField(typeHandler = JacksonTypeHandler.class)
     private List<String> pitfallTips;
 
+    /** FR-6：生成时的实时数据快照，随攻略与版本一起保存。 */
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    private TravelDataSnapshot travelData;
+    private LocalDateTime travelDataAt;
+
     private Boolean degradedMode;
 
     @TableField(typeHandler = JacksonTypeHandler.class)
@@ -70,4 +76,9 @@ public class Guidebook extends BaseEntity {
     private Integer attemptCount;
     private LocalDateTime startedAt;
     private LocalDateTime finishedAt;
+
+    /** FR-4：所属对比任务；普通攻略为空 */
+    private Long comparisonId;
+    /** budget / balanced / luxury / mixed */
+    private String variant;
 }

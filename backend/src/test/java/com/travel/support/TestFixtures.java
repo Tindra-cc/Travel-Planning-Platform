@@ -90,7 +90,8 @@ public final class TestFixtures {
 
     public static GuidebookNodeDto node(String id, String start, String end, String place) {
         return new GuidebookNodeDto(id, new TimeSlotDto(start, end), "activity",
-                new PlaceDto(place, 30.66, 104.06), null, "[K1] 内置知识", null, "测试节点");
+                new PlaceDto(place, 30.66, 104.06), null, "[K1] 内置知识", null, null, null,
+                null, null, "测试节点");
     }
 
     public static BudgetBreakdownDto budget() {

@@ -1,11 +1,13 @@
 package com.travel.modules.guidebook.entity;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import com.travel.common.BaseEntity;
+import com.travel.modules.guidebook.data.TravelDataSnapshot;
 import com.travel.modules.guidebook.dto.BudgetBreakdownDto;
 import com.travel.modules.guidebook.dto.GuidebookDayDto;
 
@@ -41,6 +43,10 @@ public class GuidebookVersion extends BaseEntity {
 
     @TableField(typeHandler = JacksonTypeHandler.class)
     private List<String> pitfallTips;
+
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    private TravelDataSnapshot travelData;
+    private LocalDateTime travelDataAt;
 
     private String changeSummary;
     private String changeType;

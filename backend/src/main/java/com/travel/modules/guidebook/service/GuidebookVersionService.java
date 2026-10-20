@@ -40,6 +40,9 @@ public class GuidebookVersionService {
         snapshot.setPackingList(guidebook.getPackingList());
         snapshot.setCulturalTips(guidebook.getCulturalTips());
         snapshot.setPitfallTips(guidebook.getPitfallTips());
+        // FR-6：数据快照随版本保存，历史版本的时效信息不会被新采集覆盖。
+        snapshot.setTravelData(guidebook.getTravelData());
+        snapshot.setTravelDataAt(guidebook.getTravelDataAt());
         snapshot.setChangeType(changeType);
         snapshot.setChangeSummary(truncate(changeSummary));
         snapshot.setCreatedBy(createdBy);

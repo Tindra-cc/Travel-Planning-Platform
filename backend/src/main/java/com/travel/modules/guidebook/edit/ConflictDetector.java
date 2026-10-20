@@ -3,13 +3,16 @@ package com.travel.modules.guidebook.edit;
 import java.math.BigDecimal;
 import java.time.DateTimeException;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
 import com.travel.modules.chat.dto.IntentDto;
+import com.travel.modules.guidebook.data.OpeningHours;
 import com.travel.modules.guidebook.dto.BudgetBreakdownDto;
 import com.travel.modules.guidebook.dto.GuidebookDayDto;
 import com.travel.modules.guidebook.dto.GuidebookNodeDto;
@@ -55,13 +58,63 @@ public class ConflictDetector {
     private List<NodeConflictDto> detect(List<GuidebookDayDto> days, BudgetBreakdownDto budgetBreakdown,
             IntentDto intent) {
         List<NodeConflictDto> conflicts = new ArrayList<>();
+        LocalDate tripStart = tripStart(intent);
         if (days != null) {
             for(GuidebookDayDto day :days){
                 checkDay(day, conflicts);
+                checkOpeningHours(day, tripStart, conflicts);
             }
         }
         checkBudget(budgetBreakdown, intent, conflicts);
         return conflicts;
+    }
+
+    /** 行程首日；解析失败时营业时间检查退化为「只知道星期未知」，不会误报。 */
+    private LocalDate tripStart(IntentDto intent) {
+        if (intent == null || intent.getDateWindow() == null
+                || intent.getDateWindow().getStart() == null) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(intent.getDateWindow().getStart());
+        } catch (DateTimeException e) {
+            return null;
+        }
+    }
+
+    /**
+     * 营业时间越界：仅在 OSM 数据可解析且时段完全落在营业窗口之外时报冲突。
+     * 无法解析的 opening_hours 直接跳过，宁可漏报。
+     */
+    private void checkOpeningHours(GuidebookDayDto day, LocalDate tripStart,
+            List<NodeConflictDto> conflicts) {
+        if (day == null || day.getNodes() == null) {
+            return;
+        }
+        LocalDate date = tripStart != null && day.getDay() != null
+                ? tripStart.plusDays(day.getDay() - 1L)
+                : null;
+        for (GuidebookNodeDto node : day.getNodes()) {
+            if (node == null || node.getTimeSlot() == null
+                    || node.getOpeningHours() == null || node.getOpeningHours().isBlank()) {
+                continue;
+            }
+            Optional<OpeningHours> parsed = OpeningHours.parse(node.getOpeningHours());
+            if (parsed.isEmpty()) {
+                continue;
+            }
+            LocalTime start = parseTime(node.getTimeSlot().getStart());
+            LocalTime end = parseTime(node.getTimeSlot().getEnd());
+            if (start == null || end == null || !end.isAfter(start)) {
+                continue;
+            }
+            if (!parsed.get().allows(date, start, end)) {
+                conflicts.add(new NodeConflictDto(TYPE_CLOSED_TIME, day.getDay(),
+                        List.of(node.getNodeId()),
+                        "「" + placeName(node) + "」(" + start + "-" + end
+                                + ") 不在营业时间 " + node.getOpeningHours() + " 内"));
+            }
+        }
     }
 
     /**
