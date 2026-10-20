@@ -21,11 +21,15 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.travel.common.BizException;
 import com.travel.common.ResultCode;
+import com.travel.modules.guidebook.dto.AdjustResponse;
+import com.travel.modules.guidebook.dto.GuidebookConfirmResponse;
 import com.travel.modules.guidebook.dto.GuidebookEditResponse;
 import com.travel.modules.guidebook.dto.GuidebookValidateResponse;
 import com.travel.modules.guidebook.dto.NodeConflictDto;
 import com.travel.modules.guidebook.dto.UpdateNodeRequest;
+import com.travel.modules.guidebook.service.GuidebookAdjustService;
 import com.travel.modules.guidebook.service.GuidebookConflictService;
+import com.travel.modules.guidebook.service.GuidebookConfirmService;
 import com.travel.modules.guidebook.service.GuidebookEditService;
 import com.travel.support.MvcTestSupport;
 
@@ -36,12 +40,17 @@ class GuidebookEditControllerTest {
     private GuidebookEditService editService;
     @Mock
     private GuidebookConflictService conflictService;
+    @Mock
+    private GuidebookAdjustService adjustService;
+    @Mock
+    private GuidebookConfirmService confirmService;
 
     private MockMvc mvc;
 
     @BeforeEach
     void setUp() {
-        mvc = MvcTestSupport.mockMvc(new GuidebookEditController(editService, conflictService));
+        mvc = MvcTestSupport.mockMvc(new GuidebookEditController(
+                editService, conflictService, adjustService, confirmService));
     }
 
     @Test
@@ -99,5 +108,73 @@ class GuidebookEditControllerTest {
 
         verify(editService).updateNode(eq(5L), eq(1), eq("n1"),
                 any(UpdateNodeRequest.class));
+    }
+
+    @Test
+    void adjustBindsInstructionAndReturnsEnvelope() throws Exception {
+        when(adjustService.adjust(5L, "把博物馆挪到第二天"))
+                .thenReturn(new AdjustResponse(5L, 3, "把博物馆挪到 Day2",
+                        List.of(), List.of()));
+
+        mvc.perform(post("/api/guidebooks/5/adjust")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"instruction\":\"把博物馆挪到第二天\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.guidebookId").value(5))
+                .andExpect(jsonPath("$.data.version").value(3))
+                .andExpect(jsonPath("$.data.changeSummary").value("把博物馆挪到 Day2"))
+                .andExpect(jsonPath("$.data.changes").isEmpty())
+                .andExpect(jsonPath("$.data.conflicts").isEmpty());
+
+        verify(adjustService).adjust(5L, "把博物馆挪到第二天");
+    }
+
+    @Test
+    void adjustMapsUnprocessableTo422() throws Exception {
+        when(adjustService.adjust(eq(5L), any()))
+                .thenThrow(new BizException(ResultCode.UNPROCESSABLE, "AI 输出无法解析"));
+
+        mvc.perform(post("/api/guidebooks/5/adjust")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"instruction\":\"改一下\"}"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value(42200));
+    }
+
+    @Test
+    void adjustMapsRateLimitTo429() throws Exception {
+        when(adjustService.adjust(eq(5L), any()))
+                .thenThrow(new BizException(ResultCode.TOO_MANY_REQUEST, "该攻略正在调整中"));
+
+        mvc.perform(post("/api/guidebooks/5/adjust")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"instruction\":\"改一下\"}"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.code").value(42900));
+    }
+
+    @Test
+    void confirmReturnsStatusEnvelope() throws Exception {
+        when(confirmService.confirm(5L))
+                .thenReturn(new GuidebookConfirmResponse(5L, "confirmed"));
+
+        mvc.perform(post("/api/guidebooks/5/confirm"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.guidebookId").value(5))
+                .andExpect(jsonPath("$.data.status").value("confirmed"));
+
+        verify(confirmService).confirm(5L);
+    }
+
+    @Test
+    void confirmMapsConflictTo422() throws Exception {
+        when(confirmService.confirm(5L))
+                .thenThrow(new BizException(ResultCode.UNPROCESSABLE, "存在 1 处冲突"));
+
+        mvc.perform(post("/api/guidebooks/5/confirm"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value(42200));
     }
 }

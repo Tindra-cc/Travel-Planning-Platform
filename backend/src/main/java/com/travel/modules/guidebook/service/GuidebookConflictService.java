@@ -34,9 +34,18 @@ public class GuidebookConflictService {
             || Guidebook.STATUS_FAILED.equals(guidebook.getStatus())) {
             throw new BizException(ResultCode.CONFLICT,"攻略尚未生成完成，暂不能校验");
         }
-        List<NodeConflictDto> conflicts = conflictDetector.detect(guidebook);
+        List<NodeConflictDto> conflicts = detect(guidebook);
 
         return  new GuidebookValidateResponse(conflicts.isEmpty(),conflicts);
+    }
+
+    /**
+     * 对已加载的攻略实体做冲突检测，供编辑/调整/确认复用。
+     * @param guidebook 攻略实体
+     * @return 冲突列表
+     */
+    public List<NodeConflictDto> detect(Guidebook guidebook) {
+        return conflictDetector.detect(guidebook);
     }
 
 

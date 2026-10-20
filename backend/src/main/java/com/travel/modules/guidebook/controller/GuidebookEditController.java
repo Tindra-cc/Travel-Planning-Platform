@@ -10,11 +10,16 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.travel.common.Result;
 import com.travel.modules.guidebook.dto.AddNodeRequest;
+import com.travel.modules.guidebook.dto.AdjustRequest;
+import com.travel.modules.guidebook.dto.AdjustResponse;
+import com.travel.modules.guidebook.dto.GuidebookConfirmResponse;
 import com.travel.modules.guidebook.dto.GuidebookEditResponse;
 import com.travel.modules.guidebook.dto.GuidebookValidateResponse;
 import com.travel.modules.guidebook.dto.MoveNodeRequest;
 import com.travel.modules.guidebook.dto.UpdateNodeRequest;
+import com.travel.modules.guidebook.service.GuidebookAdjustService;
 import com.travel.modules.guidebook.service.GuidebookConflictService;
+import com.travel.modules.guidebook.service.GuidebookConfirmService;
 import com.travel.modules.guidebook.service.GuidebookEditService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,6 +34,8 @@ public class GuidebookEditController {
 
     private final GuidebookEditService editService;
     private final GuidebookConflictService conflictService;
+    private final GuidebookAdjustService adjustService;
+    private final GuidebookConfirmService confirmService;
 
     /**
      * 编辑节点：只覆盖传入的时段 / 地点 / 备注。
@@ -88,5 +95,30 @@ public class GuidebookEditController {
     @PostMapping("/{guidebookId}/validate")
     public Result<GuidebookValidateResponse> validate(@PathVariable  Long guidebookId){
         return Result.success(conflictService.validate(guidebookId));
+    }
+
+    /**
+     * §7.5 对话式调整：由 AI 解析指令并生成一份新版本。
+     * 同步接口，可能耗时数十秒；失败时不改变任何数据。
+     * @param guidebookId 攻略 ID
+     * @param req 调整指令
+     * @return 新版本、摘要、变更与冲突
+     */
+    @Operation(summary = "对话式调整")
+    @PostMapping("/{guidebookId}/adjust")
+    public Result<AdjustResponse> adjust(@PathVariable Long guidebookId,
+            @RequestBody AdjustRequest req) {
+        return Result.success(adjustService.adjust(guidebookId, req.getInstruction()));
+    }
+
+    /**
+     * §7.7 确认攻略：有未解决冲突时返回 42200，状态不变。
+     * @param guidebookId 攻略 ID
+     * @return guidebookId 与 confirmed 状态
+     */
+    @Operation(summary = "确认攻略")
+    @PostMapping("/{guidebookId}/confirm")
+    public Result<GuidebookConfirmResponse> confirm(@PathVariable Long guidebookId) {
+        return Result.success(confirmService.confirm(guidebookId));
     }
 }

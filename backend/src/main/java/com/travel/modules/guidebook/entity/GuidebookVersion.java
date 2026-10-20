@@ -4,7 +4,6 @@ import java.util.List;
 
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
-import com.baomidou.mybatisplus.annotation.Version;
 import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import com.travel.common.BaseEntity;
 import com.travel.modules.guidebook.dto.BudgetBreakdownDto;
@@ -25,8 +24,7 @@ public class GuidebookVersion extends BaseEntity {
 
     private Long guidebookId;
     private String title;
-    
-    @Version
+
     private Integer version;
 
     @TableField(typeHandler = JacksonTypeHandler.class)
