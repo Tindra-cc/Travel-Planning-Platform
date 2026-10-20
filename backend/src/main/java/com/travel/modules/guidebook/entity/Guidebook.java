@@ -6,6 +6,7 @@ import java.util.Map;
 
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.Version;
 import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import com.travel.common.BaseEntity;
 import com.travel.modules.chat.dto.IntentDto;
@@ -31,6 +32,8 @@ public class Guidebook extends BaseEntity {
     private Long userId;
     private Long sessionId;
     private String status;
+    
+    @Version
     private Integer version;
     private String title;
 

@@ -5,11 +5,14 @@ import java.util.ArrayList;
 
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.travel.common.BizException;
 import com.travel.common.ResultCode;
 import com.travel.modules.guidebook.entity.Guidebook;
+import com.travel.modules.guidebook.entity.GuidebookVersion;
 import com.travel.modules.guidebook.mapper.GuidebookMapper;
+import com.travel.modules.guidebook.service.GuidebookVersionService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -20,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 public class PersistStep implements GenerationStep {
 
     private final GuidebookMapper guidebookMapper;
+    private final GuidebookVersionService versionService;
 
     @Override
     public String name() {
@@ -32,6 +36,7 @@ public class PersistStep implements GenerationStep {
     }
 
     @Override
+    @Transactional
     public void execute(GenerationContext ctx) {
         Guidebook guidebook = new Guidebook();
         guidebook.setId(ctx.getGuidebookId());
@@ -50,6 +55,8 @@ public class PersistStep implements GenerationStep {
         if (guidebookMapper.updateById(guidebook) != 1) {
             throw new BizException(ResultCode.NOT_FOUND, "攻略不存在或已被删除");
         }
+        Guidebook current = guidebookMapper.selectById(ctx.getGuidebookId());
+        versionService.append(current,GuidebookVersion.CHANGE_TYPE_GENERATE,"初次生成攻略",ctx.getUserId());
     }
 
     private String truncate(String title) {
