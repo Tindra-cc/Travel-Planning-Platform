@@ -30,10 +30,10 @@ public class LoginAttemptGuard {
     private static final Duration CODE_MIN_INTERVAL = Duration.ofSeconds(60);
     private static final int CODE_DAILY_LIMIT = 10;
 
-    private static final String LOGIN_LOCK = "auth:login:lock:";
-    private static final String LOGIN_FAIL = "auth:login:fail:";
-    private static final String CODE_SEND = "auth:code:send:";
-    private static final String CODE_DAY = "auth:code:day:";
+    private static final String LOGIN_LOCK = "travel:auth:login:lock:";
+    private static final String LOGIN_FAIL = "travel:auth:login:fail:";
+    private static final String CODE_SEND = "travel:auth:code:send:";
+    private static final String CODE_DAY = "travel:auth:code:day:";
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("yyyyMMdd");
 
     private final StringRedisTemplate redis;
@@ -71,7 +71,15 @@ public class LoginAttemptGuard {
             throw new BizException(ResultCode.TOO_MANY_REQUEST, "发送过于频繁，请 60 秒后再试");
         }
         String sent = redis.opsForValue().get(dayKey(account));
-        if (sent != null && Integer.parseInt(sent) >= CODE_DAILY_LIMIT) {
+        int sentToday;
+        try {
+            sentToday = sent == null ? 0 : Integer.parseInt(sent);
+        } catch (NumberFormatException e) {
+            // db0 可能与其它应用共用，遇到异形值直接清理，避免一次脏数据导致接口 500。
+            redis.delete(dayKey(account));
+            sentToday = 0;
+        }
+        if (sentToday >= CODE_DAILY_LIMIT) {
             throw new BizException(ResultCode.TOO_MANY_REQUEST,
                     "今日验证码发送次数已达上限（" + CODE_DAILY_LIMIT + " 次），请明天再试");
         }

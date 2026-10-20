@@ -108,7 +108,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { sendVerifyCode } from '@/api/auth'
@@ -214,6 +214,11 @@ function safeRedirect(): string {
   if (!value.startsWith('/') || value.startsWith('//')) return '/discover'
   return router.resolve(value).matched.length ? value : '/discover'
 }
+
+onBeforeUnmount(() => {
+  clearInterval(codeTimer)
+  clearInterval(lockTimer)
+})
 
 async function onSubmit() {
   try {

@@ -33,7 +33,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class AuthService {
 
-    private static final String CODE_KEY_PREFIX = "verify:";
+    private static final String CODE_KEY_PREFIX = "travel:auth:verify:";
     private static final Duration CODE_TTL = Duration.ofMinutes(5);
     private static final int DEFAULT_QUOTA = 3;
 

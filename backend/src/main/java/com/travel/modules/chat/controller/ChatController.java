@@ -58,7 +58,7 @@ public class ChatController {
     }
 
     @Operation(summary = "确认生成攻略",
-            description = "要求会话处于 ready_to_generate，否则 42200。本期仅置为 generating 并返回 guidebookId=null，真正的生成在 Sprint 2 接入。")
+            description = "要求会话处于 ready_to_generate，否则 42200。触发生成流水线并返回真实 guidebookId；同会话重复确认幂等返回同一本攻略。")
     @PostMapping("/{sessionId}/confirm")
     public Result<ConfirmResponse> confirm(@PathVariable Long sessionId) {
         return Result.success(chatService.confirm(sessionId));
