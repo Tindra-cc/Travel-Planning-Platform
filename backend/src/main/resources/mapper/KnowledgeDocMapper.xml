@@ -10,6 +10,7 @@
                 + COALESCE(k.sort_weight, 0)::numeric / 1000) AS match_score
         FROM t_knowledge_doc k
         WHERE k.deleted = 0
+          AND k.status = 'approved'
           AND (
             k.destination = #{destination}
             <if test="keywords != null and keywords.size() > 0">

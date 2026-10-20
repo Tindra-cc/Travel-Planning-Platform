@@ -17,6 +17,8 @@ import lombok.EqualsAndHashCode;
 public class GuidePost extends BaseEntity {
 
     public static final String STATUS_PUBLISHED = "published";
+    public static final String REVIEW_APPROVED = "approved";
+    public static final String REVIEW_REJECTED = "rejected";
 
     private String title;
     private String destination;
@@ -33,6 +35,7 @@ public class GuidePost extends BaseEntity {
     private String budgetLevel;
     private String status;
     private Integer sortWeight;
+    private String reviewStatus;
 
     // ---- 详情字段（V5 新增；列表接口不返回，避免把重内容塞进信息流） ----
 

@@ -31,7 +31,7 @@ class KnowledgeServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new KnowledgeService(knowledgeDocMapper);
+        service = new KnowledgeService(new KeywordKnowledgeRetriever(knowledgeDocMapper));
     }
 
     @Test
@@ -101,6 +101,19 @@ class KnowledgeServiceTest {
 
         assertThat(snippets).hasSize(1);
         assertThat(snippets.get(0).title()).isEqualTo("宽窄巷子");
+    }
+
+    @Test
+    void snippetsCarryCitationTypeAndPublishedDate() {
+        KnowledgeDoc poi = doc(1L, "宽窄巷子");
+        poi.setDocType("poi");
+        poi.setCreateTime(java.time.LocalDateTime.of(2026, 10, 1, 9, 30));
+        when(knowledgeDocMapper.search(any(), anyList(), anyInt())).thenReturn(List.of(poi));
+
+        List<KnowledgeSnippet> snippets = service.retrieve("成都", List.of(), 5);
+
+        assertThat(snippets.get(0).type()).isEqualTo("encyclopedia");
+        assertThat(snippets.get(0).publishedAt()).isEqualTo("2026-10-01");
     }
 
     @Test
