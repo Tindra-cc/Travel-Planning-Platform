@@ -224,9 +224,44 @@ export interface GuidebookNode {
   type: string | null
   place: GuidebookPlace | null
   resourceSlotId?: string | null
+  /** 已绑定的资源详情；未绑定或解析失败为 null */
+  resource?: ResourceItem | null
   source: string | null
   dataFreshness: string | null
+  /** OSM 营业时间原始值；未查到为 null */
+  openingHours?: string | null
+  openingHoursSource?: string | null
+  /** 结构化溯源引用；无资料时为一条 general 引用 */
+  citations?: Citation[] | null
   note: string | null
+}
+
+export interface Citation {
+  /** prompt 中的 [K1] 编号；通用知识为 null */
+  code: string | null
+  /** encyclopedia / travelogue / route / expert / guide / general */
+  type: string
+  title: string | null
+  sourceName: string | null
+  sourceUrl: string | null
+  publishedAt: string | null
+  summary: string | null
+}
+
+// ---- §13 FR-6 实时数据 ----
+
+export interface DataBlock {
+  source: string
+  /** ok / unavailable */
+  status: string
+  summary: string | null
+  data: Record<string, unknown> | null
+  fetchedAt: string | null
+}
+
+export interface TravelDataSnapshot {
+  fetchedAt: string | null
+  blocks: DataBlock[]
 }
 
 export interface GuidebookDay {
@@ -260,6 +295,8 @@ export interface GuidebookDetail {
   disclaimer: string | null
   degradedMode: boolean | null
   degradationReasons: string[] | null
+  travelData?: TravelDataSnapshot | null
+  travelDataAt?: string | null
   currentStep: string | null
   progress: number | null
   errorMessage: string | null
@@ -329,4 +366,98 @@ export interface NodePayload{
   timeSlot: GuidebookTimeSlot
   place: GuidebookPlace
   note?: string | null
+}
+
+// ---- §8 FR-8 资源与预订 ----
+
+export interface ResourcePriceRange {
+  min: number | null
+  max: number | null
+  currency: string | null
+}
+
+export interface ResourceItem {
+  resourceSlotId: string
+  /** flight / hotel / ticket / car / dining */
+  type: string
+  supplier: string | null
+  priceRange: ResourcePriceRange | null
+  /** available / tight / sold_out / link_error */
+  availability: string | null
+  refundPolicy: string | null
+  /** 服务端签名后的转链；不可预订时为 null */
+  bookingLink: string | null
+  freshness: string | null
+}
+
+export interface LinkValidateResult {
+  resourceSlotId: string
+  valid: boolean
+  /** not_found / stale / sold_out / link_error */
+  reason: string | null
+  fallbackSupplier: string | null
+}
+
+// ---- §9 FR-9 离线攻略包 ----
+export type OfflinePackFormat = 'pdf' | 'html'
+
+export interface OfflinePackTask{
+  taskId: string
+  /** processing / completed / failed */
+  status: string
+}
+
+export interface OfflinePackStatus{
+  taskId: string
+  /** processing / completed / failed */
+  status: string
+  downloadUrl: string | null
+  expiresAt: string | null
+  errorMessage: string | null
+}
+
+// ---- §6 FR-4 多方案对比与混搭 ----
+
+export interface CompareGuidebookItem {
+  guidebookId: string
+  /** budget / balanced / luxury */
+  variant: string
+  totalBudget: { min: number | null; max: number | null } | null
+}
+
+export interface CompareResponse {
+  comparisonId: string
+  guidebooks: CompareGuidebookItem[]
+}
+
+export interface ComparisonVariant {
+  guidebookId: string
+  variant: string
+  status: string
+  progress: number | null
+  title: string | null
+  totalBudget: { min: number | null; max: number | null } | null
+  dayCount: number
+  highlights: string[] | null
+}
+
+export interface ComparisonDetail {
+  comparisonId: string
+  baseGuidebookId: string
+  /** processing / completed / partial / failed */
+  status: string
+  errorMessage: string | null
+  variants: ComparisonVariant[]
+}
+
+export interface MixPick {
+  guidebookId: string
+  nodeId: string
+}
+
+export interface MixResponse {
+  guidebookId: string | null
+  /** draft / blocked */
+  status: string
+  conflicts: NodeConflict[]
 }

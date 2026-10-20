@@ -82,4 +82,19 @@ mybatis-plus:
 app:
   cors:
     allowed-origins: http://localhost:5173,http://127.0.0.1:5173
+  admin:
+    # 运营接口白名单；未配置时仅 L3 用户可访问
+    user-ids: ${ADMIN_USER_IDS:}
+  link:
+    # 开发环境固定密钥，便于重启后转链仍可用；生产必须注入环境变量
+    signing-secret: ${LINK_SIGNING_SECRET:dev-only-link-secret}
+  offline-pack:
+    storage-dir: ${OFFLINE_PACK_DIR:./data/offline-packs}
+    expire-hours: 72
+  travel-data:
+    # 价格源未配置时对应数据块标记 unavailable，绝不编造价格
+    flight-price-url: ${FLIGHT_PRICE_URL:}
+    hotel-price-url: ${HOTEL_PRICE_URL:}
+    price-token: ${PRICE_SOURCE_TOKEN:}
+    timeout-seconds: 4
 

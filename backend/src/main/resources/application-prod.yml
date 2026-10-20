@@ -68,3 +68,17 @@ logging:
 app:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:https://travel.example.com}
+  admin:
+    # 运营接口白名单；未配置时仅 L3 用户可访问
+    user-ids: ${ADMIN_USER_IDS:}
+  link:
+    # 未注入时服务会使用进程内随机密钥并告警，重启后旧转链失效
+    signing-secret: ${LINK_SIGNING_SECRET:}
+  offline-pack:
+    storage-dir: ${OFFLINE_PACK_DIR:/app/data/offline-packs}
+    expire-hours: 72
+  travel-data:
+    flight-price-url: ${FLIGHT_PRICE_URL:}
+    hotel-price-url: ${HOTEL_PRICE_URL:}
+    price-token: ${PRICE_SOURCE_TOKEN:}
+    timeout-seconds: 4
