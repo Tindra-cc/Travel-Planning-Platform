@@ -26,6 +26,7 @@ public class Guidebook extends BaseEntity {
     public static final String STATUS_CONFIRMED = "confirmed";
     public static final String STATUS_EXECUTING = "executing";
     public static final String STATUS_COMPLETED = "completed";
+    public static final String STATUS_EDITING = "editing";
 
     private Long userId;
     private Long sessionId;

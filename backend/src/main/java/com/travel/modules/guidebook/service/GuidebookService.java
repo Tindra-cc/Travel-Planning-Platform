@@ -57,7 +57,7 @@ public class GuidebookService {
     private static final List<String> ACTIVE_STATUSES = List.of(
             Guidebook.STATUS_GENERATING, Guidebook.STATUS_DRAFT,
             Guidebook.STATUS_CONFIRMED, Guidebook.STATUS_EXECUTING,
-            Guidebook.STATUS_COMPLETED);
+            Guidebook.STATUS_COMPLETED, Guidebook.STATUS_EDITING);
 
     private final GuidebookMapper guidebookMapper;
     private final ChatSessionMapper sessionMapper;
