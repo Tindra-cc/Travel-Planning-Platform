@@ -461,3 +461,79 @@ export interface MixResponse {
   status: string
   conflicts: NodeConflict[]
 }
+
+// ---- §10 FR-10 行程伴侣 ----
+
+export interface SuggestionOperation {
+  /** move_node / swap_node */
+  op: string
+  nodeId: string | null
+  toDay: number | null
+  timeSlot: GuidebookTimeSlot | null
+  /** swap_node 使用 */
+  nodeB: string | null
+}
+
+export interface TripSuggestion {
+  suggestionId: string
+  /** weather_relocate / opening_hours / local_news */
+  type: string
+  reason: string | null
+  action: string | null
+  operations: SuggestionOperation[] | null
+  alternatives: Record<string, unknown>[] | null
+  evidence: Record<string, unknown> | null
+  status: 'pending' | 'accepted' | 'rejected' | 'expired'
+  createdAt: string | null
+  expiresAt: string | null
+}
+
+export interface TodayNode {
+  nodeId: string
+  day: number
+  timeSlotStart: string | null
+  timeSlotEnd: string | null
+  type: string | null
+  placeName: string | null
+  note: string | null
+  executionStatus: 'executed' | 'skipped' | 'rescheduled' | null
+  markedAt: string | null
+}
+
+export interface TripCompanion {
+  guidebookId: string
+  status: string
+  destination: string | null
+  startDate: string | null
+  endDate: string | null
+  currentDay: number | null
+  executedCount: number
+  skippedCount: number
+  rescheduledCount: number
+  totalCount: number
+  progress: number
+  todayNodes: TodayNode[] | null
+  suggestions: TripSuggestion[] | null
+}
+
+export interface SuggestionDecision {
+  suggestionId: string
+  status: string
+  /** false 表示提示类建议只记录、未改动行程 */
+  applied: boolean
+  version: number | null
+  summary: string | null
+}
+
+export interface NodeStatusResult {
+  guidebookId: string
+  nodeId: string
+  status: string
+  markedAt: string
+  progress: number
+}
+
+export interface RefreshResult {
+  guidebookId: string
+  created: number
+}

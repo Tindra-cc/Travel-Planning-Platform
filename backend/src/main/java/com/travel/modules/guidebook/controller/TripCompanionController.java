@@ -13,7 +13,9 @@ import com.travel.modules.guidebook.companion.TripCompanionScanService;
 import com.travel.modules.guidebook.dto.NodeStatusRequest;
 import com.travel.modules.guidebook.dto.NodeStatusResponse;
 import com.travel.modules.guidebook.dto.RefreshResponse;
+import com.travel.modules.guidebook.dto.SuggestionDecisionResponse;
 import com.travel.modules.guidebook.dto.TripCompanionResponse;
+import com.travel.modules.guidebook.service.SuggestionDecisionService;
 import com.travel.modules.guidebook.service.TripCompanionService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -28,11 +30,26 @@ public class TripCompanionController {
 
     private final TripCompanionService companionService;
     private final TripCompanionScanService scanService;
+    private final SuggestionDecisionService decisionService;
 
     @Operation(summary = "获取行程伴侣状态")
     @GetMapping("/{guidebookId}")
     public Result<TripCompanionResponse> get(@PathVariable Long guidebookId) {
         return Result.success(companionService.get(guidebookId));
+    }
+
+    @Operation(summary = "接受调整建议")
+    @PostMapping("/{guidebookId}/suggestions/{suggestionId}/accept")
+    public Result<SuggestionDecisionResponse> accept(@PathVariable Long guidebookId,
+            @PathVariable Long suggestionId) {
+        return Result.success(decisionService.accept(guidebookId, suggestionId));
+    }
+
+    @Operation(summary = "拒绝调整建议")
+    @PostMapping("/{guidebookId}/suggestions/{suggestionId}/reject")
+    public Result<SuggestionDecisionResponse> reject(@PathVariable Long guidebookId,
+            @PathVariable Long suggestionId) {
+        return Result.success(decisionService.reject(guidebookId, suggestionId));
     }
 
     @Operation(summary = "按需刷新调整建议")

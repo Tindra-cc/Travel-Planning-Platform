@@ -112,6 +112,9 @@
           </template>
           <el-button @click="openVersions">版本历史</el-button>
           <el-button v-if="canCompare" @click="openCompare">生成对比方案</el-button>
+          <el-button v-if="canUseCompanion" type="primary" plain @click="openCompanion">
+            {{ detail.status === 'executing' ? '进入行程伴侣' : '行程伴侣' }}
+          </el-button>
           <el-button
             v-if="editable"
             type="success"
@@ -600,7 +603,8 @@ const CHANGE_TYPE_LABELS: Record<string, string> = {
   generate: '初次生成',
   manual: '手动编辑',
   adjust: 'AI 调整',
-  restore: '版本回溯'
+  restore: '版本回溯',
+  companion: '行程调整'
 }
 const DEGRADE_LABELS: Record<string, string> = {
   no_knowledge: '未检索到目的地资料',
@@ -708,6 +712,9 @@ let offlinePollStartedAt = 0
 const editable = computed(() => EDITABLE_STATUSES.includes(detail.value?.status ?? ''))
 const canCompare = computed(() =>
   ['draft', 'editing', 'confirmed'].includes(detail.value?.status ?? '')
+)
+const canUseCompanion = computed(() =>
+  ['confirmed', 'executing'].includes(detail.value?.status ?? '')
 )
 const offlineBusy = computed(() => offlineStatus.value === 'processing')
 const budget = computed<BudgetBreakdown | null>(() => detail.value?.budgetBreakdown ?? null)
@@ -1264,6 +1271,12 @@ async function onExport(format: 'markdown' | 'html') {
 function openCompare() {
   compareVariants.value = ['budget', 'balanced', 'luxury']
   compareDialog.value = true
+}
+
+function openCompanion() {
+  if (guidebookId.value) {
+    router.push(`/trip/${guidebookId.value}`)
+  }
 }
 
 async function onStartCompare() {

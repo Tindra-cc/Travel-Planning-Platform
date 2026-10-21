@@ -26,8 +26,10 @@ import com.travel.common.UserContext.LoginUser;
 import com.travel.modules.guidebook.companion.TripCompanionScanService;
 import com.travel.modules.guidebook.dto.NodeStatusRequest;
 import com.travel.modules.guidebook.dto.NodeStatusResponse;
+import com.travel.modules.guidebook.dto.SuggestionDecisionResponse;
 import com.travel.modules.guidebook.dto.TodayNodeDto;
 import com.travel.modules.guidebook.dto.TripCompanionResponse;
+import com.travel.modules.guidebook.service.SuggestionDecisionService;
 import com.travel.modules.guidebook.service.TripCompanionService;
 import com.travel.support.MvcTestSupport;
 
@@ -38,13 +40,16 @@ class TripCompanionControllerTest {
     private TripCompanionService companionService;
     @Mock
     private TripCompanionScanService scanService;
+    @Mock
+    private SuggestionDecisionService decisionService;
 
     private MockMvc mvc;
 
     @BeforeEach
     void setUp() {
         UserContext.set(new LoginUser(7L, "tester"));
-        mvc = MvcTestSupport.mockMvc(new TripCompanionController(companionService, scanService));
+        mvc = MvcTestSupport.mockMvc(new TripCompanionController(companionService, scanService,
+                decisionService));
     }
 
     @AfterEach
@@ -115,6 +120,71 @@ class TripCompanionControllerTest {
                         .content(MvcTestSupport.json(request)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value(40400));
+    }
+
+    @Test
+    void acceptReturnsAppliedVersion() throws Exception {
+        when(decisionService.accept(5L, 9L)).thenReturn(new SuggestionDecisionResponse(
+                9L, "accepted", true, 3, "将 Day1 节点移到 Day2"));
+
+        mvc.perform(post("/api/trip-companion/5/suggestions/9/accept"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.suggestionId").value(9))
+                .andExpect(jsonPath("$.data.status").value("accepted"))
+                .andExpect(jsonPath("$.data.applied").value(true))
+                .andExpect(jsonPath("$.data.version").value(3));
+    }
+
+    @Test
+    void acceptHintReturnsAppliedFalse() throws Exception {
+        when(decisionService.accept(5L, 9L)).thenReturn(new SuggestionDecisionResponse(
+                9L, "accepted", false, 2, null));
+
+        mvc.perform(post("/api/trip-companion/5/suggestions/9/accept"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.applied").value(false))
+                .andExpect(jsonPath("$.data.version").value(2));
+    }
+
+    @Test
+    void acceptMapsConflictTo422() throws Exception {
+        when(decisionService.accept(anyLong(), anyLong()))
+                .thenThrow(new BizException(ResultCode.UNPROCESSABLE, "调整后存在 1 处冲突，请先处理"));
+
+        mvc.perform(post("/api/trip-companion/5/suggestions/9/accept"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value(42200));
+    }
+
+    @Test
+    void acceptMapsAlreadyDecidedTo409() throws Exception {
+        when(decisionService.accept(anyLong(), anyLong()))
+                .thenThrow(new BizException(ResultCode.CONFLICT, "建议已被处理"));
+
+        mvc.perform(post("/api/trip-companion/5/suggestions/9/accept"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value(40900));
+    }
+
+    @Test
+    void rejectReturnsRejected() throws Exception {
+        when(decisionService.reject(5L, 9L)).thenReturn(new SuggestionDecisionResponse(
+                9L, "rejected", false, null, null));
+
+        mvc.perform(post("/api/trip-companion/5/suggestions/9/reject"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("rejected"))
+                .andExpect(jsonPath("$.data.applied").value(false));
+    }
+
+    @Test
+    void rejectMapsForeignGuidebookTo403() throws Exception {
+        when(decisionService.reject(anyLong(), anyLong()))
+                .thenThrow(new BizException(ResultCode.NOT_OWNER, "无权访问该攻略"));
+
+        mvc.perform(post("/api/trip-companion/5/suggestions/9/reject"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(40301));
     }
 
     @Test

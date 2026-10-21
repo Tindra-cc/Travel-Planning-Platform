@@ -23,6 +23,7 @@ public class GuidebookVersion extends BaseEntity {
     public static final String CHANGE_TYPE_MANUAL = "manual";
     public static final String CHANGE_TYPE_ADJUST = "adjust";
     public static final String CHANGE_TYPE_RESTORE = "restore";
+    public static final String CHANGE_TYPE_COMPANION = "companion";
 
     private Long guidebookId;
     private String title;

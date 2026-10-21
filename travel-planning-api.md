@@ -1100,11 +1100,36 @@ POST /api/guidebooks/generate
 
 **POST** `/api/trip-companion/{guidebookId}/suggestions/{suggestionId}/accept`
 
-响应 `data`：返回更新后的攻略（`version` +1）。
+响应 `data`：
+
+```json
+{
+  "suggestionId": 1,
+  "status": "accepted",
+  "applied": true,
+  "version": 3,
+  "summary": "将 Day2 的 2 个户外节点移到 Day5"
+}
+```
+
+- `applied=true`：已实际改动行程。服务端深拷贝 `days` → 应用 `move_node` / `swap_node` → 冲突复检 → 乐观锁写回 → 追加 `companion`（行程调整）版本快照，`version` +1。
+- `applied=false`：提示类建议（`operations` 为空，如 `local_news`）只把建议标记为 `accepted`，**版本不变**，`version` 为当前版本。前端应提示「已记录，请自行核实」，不要刷新行程。
+- 仅 `executing` 状态的攻略可接受建议；其他状态 40900。
+- 调整后存在冲突：42200，攻略与建议都不变（建议仍为 `pending`）。
+- 建议已被处理或已过期：40900；建议不属于该攻略：40400；节点/目标日期不存在：40400。
+- 非所有者：40301。
 
 ### 10.3 拒绝调整建议
 
 **POST** `/api/trip-companion/{guidebookId}/suggestions/{suggestionId}/reject`
+
+响应 `data`：
+
+```json
+{ "suggestionId": 1, "status": "rejected", "applied": false, "version": null, "summary": null }
+```
+
+只改建议状态，不改攻略内容、不产生版本。仅 `pending` 可拒绝，否则 40900；非所有者 40301；建议不存在 40400。
 
 ### 10.4 标记节点执行状态
 
