@@ -70,16 +70,18 @@ Spring Boot 3 + Vue 3 单仓项目。文档：
 服务器上 `git clone` 后**一条命令起全栈**（Postgres + Redis + 后端 + 前端 nginx）。首次构建全部在容器内完成（多阶段 Dockerfile），**服务器无需预装 JDK / Maven / Node，本地也无需先打包**：
 
 ```bash
-cd backend
-cp .env.example .env      # 可选：填入真实密钥（.env 不入库）
+cd Travel-Planning-Platform   # 仓库根目录，后端在 backend/、前端在 frontend/
+cp .env.example .env          # 可选：填入真实密钥（.env 不入库）
 docker compose up -d --build
 ```
+
+> 根目录 [docker-compose.yml](docker-compose.yml) 是标准入口；保留 [backend/docker-compose.yml](backend/docker-compose.yml) 也可在 `backend/` 目录单独起服务。
 
 起 4 个容器：`travel-postgres` / `travel-redis` / `travel-api`（8080）/ `travel-web`（80）。访问 `http://<服务器IP>/` 即前端；前端**同源**反代 `/api` → `backend:8080`，对话 WebSocket 走 `/api/ws`（nginx 已配升级头，见 [frontend/nginx.conf](frontend/nginx.conf)）。
 
 ### 密钥与降级
 
-prod 配置（[application-prod.yml](backend/src/main/resources/application-prod.yml)）**不含任何密钥**，全部由 `backend/.env` 注入（compose 自动加载同目录 `.env`，变量写成 `${VAR:-默认值}`，**不建 `.env` 也能起**，只是功能降级）：
+prod 配置（[application-prod.yml](backend/src/main/resources/application-prod.yml)）**不含任何密钥**，全部由根目录 `.env`（或 `backend/.env`）注入（compose 自动加载同目录 `.env`，变量写成 `${VAR:-默认值}`，**不建 `.env` 也能起**，只是功能降级）：
 
 | 变量 | 不配的后果 |
 |---|---|
@@ -87,7 +89,7 @@ prod 配置（[application-prod.yml](backend/src/main/resources/application-prod
 | `QQ_MAIL_USERNAME` / `QQ_MAIL_AUTH_CODE` | 验证码接口返回 `50300`，邮箱注册不可用 |
 | `DB_PASSWORD` / `REDIS_PASSWORD` | 取默认值（`1234` / 空） |
 
-> 本地开发的 key 放在 `application-dev-local.yml`（已 gitignore），**不随仓库上传**；prod 只认 `backend/.env`。
+> 本地开发的 key 放在 `application-dev-local.yml`（已 gitignore），**不随仓库上传**；prod 只认根目录或 `backend/` 下的 `.env`。
 
 ### 端口与网络
 
