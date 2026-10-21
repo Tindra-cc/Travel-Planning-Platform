@@ -24,10 +24,13 @@ import com.travel.modules.guidebook.dto.GuidebookNodeDto;
 import com.travel.modules.guidebook.dto.NodeStatusResponse;
 import com.travel.modules.guidebook.dto.TodayNodeDto;
 import com.travel.modules.guidebook.dto.TripCompanionResponse;
+import com.travel.modules.guidebook.dto.TripSuggestionDto;
 import com.travel.modules.guidebook.edit.GuidebookNodeStatus;
 import com.travel.modules.guidebook.entity.Guidebook;
+import com.travel.modules.guidebook.entity.TripSuggestion;
 import com.travel.modules.guidebook.mapper.GuidebookMapper;
 import com.travel.modules.guidebook.mapper.GuidebookNodeStatusMapper;
+import com.travel.modules.guidebook.mapper.TripSuggestionMapper;
 
 import lombok.RequiredArgsConstructor;
 
@@ -43,6 +46,7 @@ public class TripCompanionService {
 
     private final GuidebookMapper guidebookMapper;
     private final GuidebookNodeStatusMapper nodeStatusMapper;
+    private final TripSuggestionMapper suggestionMapper;
 
     public TripCompanionResponse get(Long guidebookId) {
         Guidebook guidebook = requireOwned(guidebookId);
@@ -153,7 +157,7 @@ public class TripCompanionService {
         LocalDate end = parse(guidebook, false);
         resp.setStartDate(start == null ? null : start.toString());
         resp.setEndDate(end == null ? null : end.toString());
-        resp.setSuggestions(List.of());
+        resp.setSuggestions(suggestions(guidebook.getId()));
 
         int total = totalNodes(guidebook);
         List<GuidebookNodeStatus> marks = nodeStatusMapper.selectList(
@@ -210,6 +214,43 @@ public class TripCompanionService {
             }
         }
         return result;
+    }
+
+    /** 惰性过期后再查；只返回最近一天内待处理/已拒绝的建议。 */
+    private List<TripSuggestionDto> suggestions(Long guidebookId) {
+        LocalDateTime now = LocalDateTime.now();
+        suggestionMapper.update(null, new UpdateWrapper<TripSuggestion>()
+                .eq("guidebook_id", guidebookId)
+                .eq("status", TripSuggestion.STATUS_PENDING)
+                .lt("expires_at", now)
+                .set("status", TripSuggestion.STATUS_EXPIRED)
+                .set("decided_at", now));
+        List<TripSuggestion> rows = suggestionMapper.selectList(
+                Wrappers.<TripSuggestion>lambdaQuery()
+                        .eq(TripSuggestion::getGuidebookId, guidebookId)
+                        .in(TripSuggestion::getStatus,
+                                TripSuggestion.STATUS_PENDING,
+                                TripSuggestion.STATUS_REJECTED)
+                        .ge(TripSuggestion::getCreateTime, now.minusDays(1))
+                        .orderByDesc(TripSuggestion::getId));
+        return rows.stream().map(this::toDto).toList();
+    }
+
+    private TripSuggestionDto toDto(TripSuggestion suggestion) {
+        TripSuggestionDto dto = new TripSuggestionDto();
+        dto.setSuggestionId(suggestion.getId());
+        dto.setType(suggestion.getSuggestionType());
+        dto.setReason(suggestion.getReason());
+        dto.setAction(suggestion.getAction());
+        dto.setOperations(suggestion.getOperations());
+        dto.setAlternatives(suggestion.getAlternatives());
+        dto.setEvidence(suggestion.getEvidence());
+        dto.setStatus(suggestion.getStatus());
+        dto.setCreatedAt(suggestion.getCreateTime() == null
+                ? null : suggestion.getCreateTime().toString());
+        dto.setExpiresAt(suggestion.getExpiresAt() == null
+                ? null : suggestion.getExpiresAt().toString());
+        return dto;
     }
 
     private NodeLocation locateNode(Guidebook guidebook, String nodeId) {

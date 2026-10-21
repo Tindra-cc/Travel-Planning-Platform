@@ -21,5 +21,5 @@ public class TripCompanionResponse {
     private Double progress;
     private List<TodayNodeDto> todayNodes;
 
-    private List<Object> suggestions;
+    private List<TripSuggestionDto> suggestions;
 }

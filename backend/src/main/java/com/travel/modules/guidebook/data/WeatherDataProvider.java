@@ -49,6 +49,7 @@ public class WeatherDataProvider implements TravelDataProvider {
         data.put("start", weather.getStart());
         data.put("end", weather.getEnd());
         data.put("summary", weather.getSummary());
+        data.put("days", weather.getDays());
         String fetchedAt = weather.getFetchedAt() == null
                 ? LocalDateTime.now().format(TS) : weather.getFetchedAt();
         return Optional.of(DataBlock.ok(source(), weather.getSummary(), data, fetchedAt));

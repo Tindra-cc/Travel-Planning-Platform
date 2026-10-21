@@ -8,8 +8,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.travel.common.Result;
+import com.travel.common.UserContext;
+import com.travel.modules.guidebook.companion.TripCompanionScanService;
 import com.travel.modules.guidebook.dto.NodeStatusRequest;
 import com.travel.modules.guidebook.dto.NodeStatusResponse;
+import com.travel.modules.guidebook.dto.RefreshResponse;
 import com.travel.modules.guidebook.dto.TripCompanionResponse;
 import com.travel.modules.guidebook.service.TripCompanionService;
 
@@ -24,11 +27,19 @@ import lombok.RequiredArgsConstructor;
 public class TripCompanionController {
 
     private final TripCompanionService companionService;
+    private final TripCompanionScanService scanService;
 
     @Operation(summary = "获取行程伴侣状态")
     @GetMapping("/{guidebookId}")
     public Result<TripCompanionResponse> get(@PathVariable Long guidebookId) {
         return Result.success(companionService.get(guidebookId));
+    }
+
+    @Operation(summary = "按需刷新调整建议")
+    @PostMapping("/{guidebookId}/refresh")
+    public Result<RefreshResponse> refresh(@PathVariable Long guidebookId) {
+        int created = scanService.refresh(guidebookId, UserContext.getUserId());
+        return Result.success(new RefreshResponse(guidebookId, created));
     }
 
     @Operation(summary = "标记节点执行状态")

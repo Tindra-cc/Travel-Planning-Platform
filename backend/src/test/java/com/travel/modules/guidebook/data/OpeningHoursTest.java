@@ -2,6 +2,7 @@ package com.travel.modules.guidebook.data;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
@@ -53,6 +54,38 @@ class OpeningHoursTest {
         assertThat(OpeningHours.parse("Mo-Fr 18:00-09:00")).isEmpty();
         assertThat(OpeningHours.parse("")).isEmpty();
         assertThat(OpeningHours.parse(null)).isEmpty();
+    }
+
+    @Test
+    void nextWindowPullsEveningNodeIntoOpeningWindow() {
+        OpeningHours hours = OpeningHours.parse("Mo-Su 09:00-17:00").orElseThrow();
+
+        assertThat(hours.nextWindow(DayOfWeek.MONDAY, LocalTime.of(18, 0), LocalTime.of(19, 0)))
+                .contains(new OpeningHours.Window(LocalTime.of(9, 0), LocalTime.of(10, 0)));
+    }
+
+    @Test
+    void nextWindowShiftsEarlyNodeToOpeningTime() {
+        OpeningHours hours = OpeningHours.parse("Mo-Su 09:00-17:00").orElseThrow();
+
+        assertThat(hours.nextWindow(DayOfWeek.MONDAY, LocalTime.of(8, 0), LocalTime.of(10, 0)))
+                .contains(new OpeningHours.Window(LocalTime.of(9, 0), LocalTime.of(11, 0)));
+    }
+
+    @Test
+    void nextWindowEmptyWhenDayIsClosed() {
+        OpeningHours hours = OpeningHours.parse("Mo-Fr 09:00-17:00; Sa off").orElseThrow();
+
+        assertThat(hours.nextWindow(DayOfWeek.SATURDAY, LocalTime.of(10, 0),
+                LocalTime.of(11, 0))).isEmpty();
+    }
+
+    @Test
+    void nextWindowEmptyWhenDurationDoesNotFit() {
+        OpeningHours hours = OpeningHours.parse("Mo-Su 09:00-11:00").orElseThrow();
+
+        assertThat(hours.nextWindow(DayOfWeek.MONDAY, LocalTime.of(12, 0),
+                LocalTime.of(15, 0))).isEmpty();
     }
 
     @Test

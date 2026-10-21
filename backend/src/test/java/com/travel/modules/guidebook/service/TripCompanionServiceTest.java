@@ -34,6 +34,7 @@ import com.travel.modules.guidebook.edit.GuidebookNodeStatus;
 import com.travel.modules.guidebook.entity.Guidebook;
 import com.travel.modules.guidebook.mapper.GuidebookMapper;
 import com.travel.modules.guidebook.mapper.GuidebookNodeStatusMapper;
+import com.travel.modules.guidebook.mapper.TripSuggestionMapper;
 
 @ExtendWith(MockitoExtension.class)
 class TripCompanionServiceTest {
@@ -45,13 +46,15 @@ class TripCompanionServiceTest {
     private GuidebookMapper guidebookMapper;
     @Mock
     private GuidebookNodeStatusMapper nodeStatusMapper;
+    @Mock
+    private TripSuggestionMapper suggestionMapper;
 
     private TripCompanionService service;
 
     @BeforeEach
     void setUp() {
         UserContext.set(new LoginUser(USER_ID, "tester"));
-        service = new TripCompanionService(guidebookMapper, nodeStatusMapper);
+        service = new TripCompanionService(guidebookMapper, nodeStatusMapper, suggestionMapper);
     }
 
     @AfterEach

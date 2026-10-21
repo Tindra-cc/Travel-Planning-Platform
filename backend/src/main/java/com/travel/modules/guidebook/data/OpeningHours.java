@@ -1,6 +1,7 @@
 package com.travel.modules.guidebook.data;
 
 import java.time.DayOfWeek;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -162,7 +163,14 @@ public final class OpeningHours {
         if (date == null) {
             return true;
         }
-        DayOfWeek day = date.getDayOfWeek();
+        return isOpen(date.getDayOfWeek(), start, end);
+    }
+
+    /** 只读判断：指定星期与时段是否可容纳。未知表达式已被 parse 拒绝，不会走到这里。 */
+    public boolean isOpen(DayOfWeek day, LocalTime start, LocalTime end) {
+        if (start == null || end == null || alwaysOpen || day == null) {
+            return true;
+        }
         List<Rule> applicable = rules.stream().filter(rule -> rule.appliesTo(day)).toList();
         if (applicable.isEmpty()) {
             return false;
@@ -173,10 +181,45 @@ public final class OpeningHours {
             }
         }
         for (Rule rule : applicable) {
-            if (!rule.closed() && !start.isBefore(rule.open()) && !end.isAfter(rule.close())) {
+            if (!start.isBefore(rule.open()) && !end.isAfter(rule.close())) {
                 return true;
             }
         }
         return false;
+    }
+
+    /**
+     * 当天能否安置同样时长的时段：从营业开始与节点开始中较晚者起算。
+     * 返回的时段保证完整落在某个开放窗口内；没有可用窗口时返回 empty。
+     */
+    public Optional<Window> nextWindow(DayOfWeek day, LocalTime start, LocalTime end) {
+        if (start == null || end == null || alwaysOpen || day == null) {
+            return Optional.empty();
+        }
+        Duration duration = Duration.between(start, end);
+        if (duration.isNegative() || duration.isZero()) {
+            return Optional.empty();
+        }
+        List<Rule> applicable = rules.stream().filter(rule -> rule.appliesTo(day)).toList();
+        if (applicable.isEmpty() || applicable.stream().anyMatch(Rule::closed)) {
+            return Optional.empty();
+        }
+        return applicable.stream()
+                .filter(rule -> !rule.closed())
+                .map(rule -> {
+                    LocalTime open = start.isAfter(rule.open()) ? start : rule.open();
+                    if (open.plus(duration).isAfter(rule.close())) {
+                        // 节点开始时间已过窗口尾部：退回窗口开始处再试一次
+                        open = rule.open();
+                    }
+                    LocalTime close = open.plus(duration);
+                    return close.isAfter(rule.close()) ? null : new Window(open, close);
+                })
+                .filter(java.util.Objects::nonNull)
+                .min((a, b) -> a.start().compareTo(b.start()));
+    }
+
+    /** 一段可安排的营业窗口。 */
+    public record Window(LocalTime start, LocalTime end) {
     }
 }

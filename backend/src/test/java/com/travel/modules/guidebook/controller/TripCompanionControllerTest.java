@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.util.List;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,6 +21,9 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.travel.common.BizException;
 import com.travel.common.ResultCode;
+import com.travel.common.UserContext;
+import com.travel.common.UserContext.LoginUser;
+import com.travel.modules.guidebook.companion.TripCompanionScanService;
 import com.travel.modules.guidebook.dto.NodeStatusRequest;
 import com.travel.modules.guidebook.dto.NodeStatusResponse;
 import com.travel.modules.guidebook.dto.TodayNodeDto;
@@ -32,12 +36,20 @@ class TripCompanionControllerTest {
 
     @Mock
     private TripCompanionService companionService;
+    @Mock
+    private TripCompanionScanService scanService;
 
     private MockMvc mvc;
 
     @BeforeEach
     void setUp() {
-        mvc = MvcTestSupport.mockMvc(new TripCompanionController(companionService));
+        UserContext.set(new LoginUser(7L, "tester"));
+        mvc = MvcTestSupport.mockMvc(new TripCompanionController(companionService, scanService));
+    }
+
+    @AfterEach
+    void tearDown() {
+        UserContext.clear();
     }
 
     @Test
@@ -101,6 +113,37 @@ class TripCompanionControllerTest {
         mvc.perform(post("/api/trip-companion/5/nodes/missing/status")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(MvcTestSupport.json(request)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(40400));
+    }
+
+    @Test
+    void refreshReturnsCreatedCount() throws Exception {
+        when(scanService.refresh(5L, 7L)).thenReturn(2);
+
+        mvc.perform(post("/api/trip-companion/5/refresh"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.guidebookId").value(5))
+                .andExpect(jsonPath("$.data.created").value(2));
+    }
+
+    @Test
+    void refreshMapsForeignGuidebookTo403() throws Exception {
+        when(scanService.refresh(anyLong(), anyLong()))
+                .thenThrow(new BizException(ResultCode.NOT_OWNER, "无权访问该攻略"));
+
+        mvc.perform(post("/api/trip-companion/5/refresh"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(40301));
+    }
+
+    @Test
+    void refreshMapsMissingGuidebookTo404() throws Exception {
+        when(scanService.refresh(anyLong(), anyLong()))
+                .thenThrow(new BizException(ResultCode.NOT_FOUND, "攻略不存在"));
+
+        mvc.perform(post("/api/trip-companion/5/refresh"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value(40400));
     }

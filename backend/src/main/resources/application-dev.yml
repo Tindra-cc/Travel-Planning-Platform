@@ -97,4 +97,8 @@ app:
     hotel-price-url: ${HOTEL_PRICE_URL:}
     price-token: ${PRICE_SOURCE_TOKEN:}
     timeout-seconds: 4
+  trip-companion:
+    # 定时扫描开关；refresh 接口不受影响
+    scheduling-enabled: ${TRIP_COMPANION_SCHEDULING:true}
+    scan-cron: "${TRIP_COMPANION_SCAN_CRON:0 */15 * * * *}"
 

@@ -1071,20 +1071,30 @@ POST /api/guidebooks/generate
 
 ```json
 {
-  "guidebookId": "g50001",
+  "guidebookId": 50001,
   "status": "executing",
   "todayNodes": [],
   "suggestions": [
     {
-      "suggestionId": "sg1",
-      "reason": "今天下雨，户外景点体验差",
-      "action": "将 Day2 户外景点换到 Day5",
+      "suggestionId": 1,
+      "type": "weather_relocate",
+      "reason": "今天预报「小雨」，户外活动体验差",
+      "action": "将 Day2 的 2 个户外节点移到 Day5",
+      "operations": [
+        { "op": "move_node", "nodeId": "n2", "toDay": 5,
+          "timeSlot": { "start": "09:00", "end": "11:00" } }
+      ],
       "alternatives": [],
-      "createdAt": "2026-11-02T07:00:00Z"
+      "evidence": { "source": "weather", "fetchedAt": "2026-11-02T07:00:00" },
+      "status": "pending",
+      "createdAt": "2026-11-02T07:00:00",
+      "expiresAt": "2026-11-02T23:59:59"
     }
   ]
 }
 ```
+
+`suggestions` 只返回最近 24 小时内的 `pending` / `rejected` 建议，按创建时间倒序；读取时会把已过期的 `pending` 惰性置为 `expired`。`type` 枚举：`weather_relocate` / `opening_hours` / `local_news`。只有带 `operations` 的建议才可自动改行程（阶段 C）；`local_news` 恒为空操作，仅作提示。
 
 ### 10.2 接受调整建议
 
@@ -1107,6 +1117,23 @@ POST /api/guidebooks/generate
 ```
 
 `status` 枚举：`executed` / `skipped` / `rescheduled`。
+
+### 10.5 按需刷新调整建议
+
+**POST** `/api/trip-companion/{guidebookId}/refresh`
+
+仅所有者可调用；攻略状态必须是 `confirmed` / `executing` 且今天在行程窗口内，否则返回 `created = 0`。
+
+响应 `data`：
+
+```json
+{ "guidebookId": 50001, "created": 2 }
+```
+
+- 非所有者：40301；攻略不存在：40400。
+- 同一攻略同一天使用 Redis 锁（`travel:companion:job:{guidebookId}:{date}`，TTL 5 分钟），并发刷新不会重复拉取。
+- 去重键为「类型 + 触发日期 + 目标天 + 排序后的节点 ID」，数据库唯一索引兜底，重复扫描不会产生重复建议。
+- 任一数据源不可用时只是不生成对应建议，不新增猜测内容，也不删除已有建议。
 
 ---
 

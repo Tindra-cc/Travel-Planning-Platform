@@ -55,7 +55,7 @@ Spring Boot 3 + Vue 3 单仓项目。文档：
    mvn spring-boot:run
    ```
 
-   启动日志应显示 Flyway 应用 `V1`~`V17` 迁移。
+   启动日志应显示 Flyway 应用 `V1`~`V19` 迁移。
 
 3. 起前端（端口 5173，已代理 `/api` → `localhost:8080`，含 WebSocket）：
 
@@ -117,6 +117,8 @@ prod 配置（[application-prod.yml](backend/src/main/resources/application-prod
 - `V15__resource_slot.sql` — `t_resource_slot` 资源目录 + **演示种子数据**（成都/东京，不代表真实库存与价格，FR-8）
 - `V16__knowledge_review.sql` — `t_knowledge_doc` 审核/来源字段、`t_guide_post.review_status`（FR-7）
 - `V17__guidebook_comparison.sql` — `t_guidebook_comparison`，`t_guidebook` 增加 `comparison_id` / `variant`（FR-4）
+- `V18__guidebook_node_status.sql` — `t_guidebook_node_status`（FR-10 出行期节点执行状态，不改攻略版本）
+- `V19__trip_suggestion.sql` — `t_trip_suggestion`（FR-10 调整建议与去重键唯一索引）
 
 JSONB 写入依赖 JDBC 连接串上的 `?stringtype=unspecified`，请勿移除。
 
@@ -215,6 +217,15 @@ JSONB 写入依赖 JDBC 连接串上的 `?stringtype=unspecified`，请勿移除
 - 混搭：`POST /api/guidebooks/compare/{comparisonId}/mix` 复制所选节点并重新生成 ID，调用模型重平衡；模型失败时保留所选并标记 `degradedMode`（不使用模板替换）。复检冲突后，有冲突返回 `status=blocked` 且**不落库**；无冲突新建 `variant=mixed` 的 draft 并追加 v1 快照。
 - 前端：`/guidebook/compare/:comparisonId` 三列对比、跨方案勾选节点、底部「混搭所选」；冲突时展示面板并保留选择。
 
+## 行程伴侣（FR-10）
+
+- 状态投影：执行状态只写 `t_guidebook_node_status`，不修改攻略 `version`；`confirmed → executing`（进入行程首日）→ `completed`（结束日期后或全部节点 executed/skipped）。
+- 阶段 A：`GET /api/trip-companion/{guidebookId}` 返回今日节点、执行进度与建议；`POST /api/trip-companion/{guidebookId}/nodes/{nodeId}/status` 标记 `executed` / `skipped` / `rescheduled`。
+- 阶段 B：`POST /api/trip-companion/{guidebookId}/refresh` 手动触发扫描；定时任务默认每 15 分钟扫描 `confirmed / executing` 且日期覆盖今天的攻略。
+- 规则引擎：天气改期（逐日天气码判定，选择未来 3 天内天气最好的日期）、营业时间越界（复用 `OpeningHours`，24/7 与无法解析的表达式不生成建议）、当地动态提示（只产出无操作的提示）。所有规则是确定性纯函数，不调用 AI。
+- 降级与并发：任一数据源不可用时只跳过对应建议，绝不猜测；Redis 锁 `travel:companion:job:{guidebookId}:{date}`（TTL 5 分钟）+ 去重键唯一索引保证多实例、重复扫描不产生重复建议；建议在触发日 23:59:59 过期，读取时惰性置为 `expired`。
+- 开关：`app.trip-companion.scheduling-enabled`（默认 `true`）与 `scan-cron`（默认 `0 */15 * * * *`）。
+
 ## 与 PRD 的偏差
 
 | 项 | 偏差 | 原因 / 后续 |
@@ -226,7 +237,7 @@ JSONB 写入依赖 JDBC 连接串上的 `?stringtype=unspecified`，请勿移除
 
 ## 当前进度
 
-已完成：鉴权（§2）、用户画像 FR-1（§3）、对话会话 FR-2（§4，含 WS 流式）、推荐攻略流（§5.7，推荐页 + `GET /api/guides/recommend`）、推荐攻略详情（§5.8，详情页 `/discover/:postId`：多图 + 住宿/吃饭/景点/交通四模块 + 原文外链）、攻略生成 FR-3、攻略编辑 FR-5（阶段 A–I）、实时数据 FR-6、预订转链 FR-8、知识库溯源 FR-7、离线攻略包 FR-9、多方案对比与混搭 FR-4。
+已完成：鉴权（§2）、用户画像 FR-1（§3）、对话会话 FR-2（§4，含 WS 流式）、推荐攻略流（§5.7，推荐页 + `GET /api/guides/recommend`）、推荐攻略详情（§5.8，详情页 `/discover/:postId`：多图 + 住宿/吃饭/景点/交通四模块 + 原文外链）、攻略生成 FR-3、攻略编辑 FR-5（阶段 A–I）、实时数据 FR-6、预订转链 FR-8、知识库溯源 FR-7、离线攻略包 FR-9、多方案对比与混搭 FR-4、行程伴侣 FR-10（阶段 A–B）。
 
 推荐页 `/discover` 是登录后的落地页，内容为上述 `V4` 演示种子数据（封面图走 picsum.photos 外链，图片内容与目的地无关）；详情页内容由 `V7` 补充。画像页基础画像含「人均预算」与「行程天数」两个具体数值（`V6`，不影响完整性校验）。
 
@@ -247,7 +258,7 @@ FR-6/8/7/9/4 已交付：实时数据以“快照 + 逐源降级”接入，营�
 
 默认 `mvn test` 通过 Surefire `excludedGroups=integration` 排除上下文启动类，**无需任何外部服务即可全绿**；只有显式指定 `-Pintegration` 才会运行 `TravelApiApplicationTests`、`GuidebookGenerationE2ETest` 以及 `integration` 包下的 FR-4/7/8/9 全流程用例（外部 HTTP 源指向不可达地址，不需要公网）。
 
-验收标准映射（US-01–US-05 + FR-4–FR-9）：
+验收标准映射（US-01–US-05 + FR-4–FR-10）：
 
 | 用户故事 | 后端 | 前端 |
 |---|---|---|
@@ -262,6 +273,7 @@ FR-6/8/7/9/4 已交付：实时数据以“快照 + 逐源降级”接入，营�
 | FR-8 预订转链 | `ResourceServiceTest`、`LinkSignServiceTest`、`ResourceControllerTest`、`LinkControllerTest` | `GuidebookView.spec.ts` |
 | FR-9 离线攻略包 | `OfflinePackServiceTest`、`OfflinePackRunnerTest`、`OfflinePackRecoveryListenerTest`、`HtmlPackRendererTest`、`PdfPackRendererTest`、`OfflinePackControllerTest` | `GuidebookView.spec.ts` |
 | FR-4 多方案对比 | `ComparisonServiceTest`、`ComparisonRunnerTest`、`MixServiceTest`、`ComparisonControllerTest` | `CompareView.spec.ts`、`GuidebookView.spec.ts` |
+| FR-10 行程伴侣 | `TripCompanionServiceTest`、`SuggestionRuleEngineTest`、`TripCompanionScanServiceTest`、`TripCompanionSchedulerTest`、`TripCompanionControllerTest` | — |
 
 ## 常用命令
 

@@ -3,6 +3,8 @@ package com.travel.modules.guidebook.data;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.stereotype.Component;
@@ -53,30 +55,41 @@ public class OpenMeteoWeatherProvider {
                                     + "&timezone=auto&start_date={start}&end_date={end}",
                             lat, lon, start, end)
                     .retrieve().bodyToMono(String.class).block(TIMEOUT);
-            return Optional.of(new WeatherSnapshot(destination, start, end,
-                    summarize(objectMapper.readTree(forecast == null ? "{}" : forecast)),
-                    LocalDateTime.now().format(TS)));
+            List<WeatherDay> days = parseDaily(
+                    objectMapper.readTree(forecast == null ? "{}" : forecast));
+            return Optional.of(new WeatherSnapshot(destination, start, end, summarize(days),
+                    LocalDateTime.now().format(TS), days));
         } catch (Exception e) {
             log.info("天气数据获取失败 destination={}: {}", destination, e.getMessage());
             return Optional.empty();
         }
     }
 
-    private String summarize(JsonNode root) {
+    private List<WeatherDay> parseDaily(JsonNode root) {
         JsonNode daily = root.path("daily");
         JsonNode times = daily.path("time");
         JsonNode codes = daily.path("weather_code");
         JsonNode max = daily.path("temperature_2m_max");
         JsonNode min = daily.path("temperature_2m_min");
-        StringBuilder sb = new StringBuilder();
+        List<WeatherDay> days = new ArrayList<>();
         for (int i = 0; i < times.size(); i++) {
-            if (i > 0) {
+            int code = codes.path(i).asInt();
+            days.add(new WeatherDay(times.path(i).asText(), code, weatherText(code),
+                    min.path(i).asDouble(), max.path(i).asDouble()));
+        }
+        return days;
+    }
+
+    private String summarize(List<WeatherDay> days) {
+        StringBuilder sb = new StringBuilder();
+        for (WeatherDay day : days) {
+            if (sb.length() > 0) {
                 sb.append("；");
             }
-            sb.append(times.path(i).asText())
-                    .append(' ').append(weatherText(codes.path(i).asInt()))
-                    .append(' ').append(min.path(i).asDouble()).append('~')
-                    .append(max.path(i).asDouble()).append('℃');
+            sb.append(day.date())
+                    .append(' ').append(day.text())
+                    .append(' ').append(day.min()).append('~')
+                    .append(day.max()).append('℃');
         }
         return sb.length() == 0 ? "天气数据为空" : sb.toString();
     }

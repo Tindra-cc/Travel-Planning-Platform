@@ -82,3 +82,6 @@ app:
     hotel-price-url: ${HOTEL_PRICE_URL:}
     price-token: ${PRICE_SOURCE_TOKEN:}
     timeout-seconds: 4
+  trip-companion:
+    scheduling-enabled: ${TRIP_COMPANION_SCHEDULING:true}
+    scan-cron: "${TRIP_COMPANION_SCAN_CRON:0 */15 * * * *}"
