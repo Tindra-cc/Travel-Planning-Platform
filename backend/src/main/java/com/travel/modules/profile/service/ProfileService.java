@@ -2,6 +2,7 @@ package com.travel.modules.profile.service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -102,6 +103,46 @@ public class ProfileService {
         return toResponse(profile);
     }
 
+    /**
+     * 复盘建议的唯一写入入口：只允许白名单字段，并用版本条件防止覆盖并发修改。
+     * @return 新版本号
+     */
+    public int applySuggestedFields(Map<String, Object> fields, int expectedVersion) {
+        if (fields == null || fields.isEmpty()) {
+            throw new BizException(ResultCode.CONFLICT, "画像建议为空");
+        }
+        Long userId = UserContext.getUserId();
+        UserProfile profile = getOrCreate(userId);
+        int currentVersion = profile.getVersion() == null ? 0 : profile.getVersion();
+        if (currentVersion != expectedVersion) {
+            throw new BizException(ResultCode.CONFLICT, "画像已被修改，请刷新后重试");
+        }
+
+        for (Map.Entry<String, Object> entry : fields.entrySet()) {
+            switch (entry.getKey()) {
+                case "pace" -> profile.setPace(requireEnum(entry.getValue(), "pace",
+                        List.of("tight", "balanced", "relaxed")));
+                case "budgetLevel" -> profile.setBudgetLevel(requireEnum(entry.getValue(), "budgetLevel",
+                        List.of("budget", "economy", "balanced", "comfort", "luxury")));
+                case "interestTags" -> profile.setInterestTags(requireTags(entry.getValue()));
+                case "tripDays" -> profile.setTripDays(requireTripDays(entry.getValue()));
+                default -> throw new BizException(ResultCode.CONFLICT,
+                        "画像建议包含不支持的字段：" + entry.getKey());
+            }
+        }
+
+        int nextVersion = expectedVersion + 1;
+        profile.setVersion(nextVersion);
+        int rows = profileMapper.update(profile, Wrappers.<UserProfile>update()
+                .eq("id", profile.getId())
+                .eq("version", expectedVersion));
+        if (rows == 0) {
+            throw new BizException(ResultCode.CONFLICT, "画像已被修改，请刷新后重试");
+        }
+        syncCompleted(userId, profile);
+        return nextVersion;
+    }
+
     public ProfileCheckResponse check() {
         List<String> missing = missingFields(getOrCreate(UserContext.getUserId()));
         return new ProfileCheckResponse(missing.isEmpty(), missing);
@@ -136,6 +177,30 @@ public class ProfileService {
     }
 
     // ---- 内部方法 ----
+
+    private String requireEnum(Object value, String field, List<String> allowed) {
+        if (value instanceof String text && allowed.contains(text)) {
+            return text;
+        }
+        throw new BizException(ResultCode.CONFLICT, "画像建议中的 " + field + " 不合法");
+    }
+
+    private List<String> requireTags(Object value) {
+        if (value instanceof List<?> list && list.stream().allMatch(String.class::isInstance)) {
+            return list.stream().map(String.class::cast).toList();
+        }
+        throw new BizException(ResultCode.CONFLICT, "画像建议中的 interestTags 不合法");
+    }
+
+    private Integer requireTripDays(Object value) {
+        if (value instanceof Number number) {
+            int days = number.intValue();
+            if (days > 0 && days <= 60) {
+                return days;
+            }
+        }
+        throw new BizException(ResultCode.CONFLICT, "画像建议中的 tripDays 不合法");
+    }
 
     private UserProfile getOrCreate(Long userId) {
         UserProfile profile = profileMapper.selectOne(

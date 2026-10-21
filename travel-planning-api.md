@@ -1172,17 +1172,37 @@ POST /api/guidebooks/generate
 
 ```json
 {
-  "guidebookId": "g50001",
+  "guidebookId": 50001,
+  "status": "completed",
+  "totalCount": 15,
   "executedCount": 12,
   "skippedCount": 2,
   "rescheduledCount": 1,
-  "aiSummary": "整体节奏符合预期，Day3 偏紧已记入画像",
-  "profileSuggestion": {
-    "preferRelaxedPace": true,
-    "reason": "用户多次跳过紧凑节点"
-  }
+  "untouchedCount": 0,
+  "skipRate": 0.1333,
+  "aiSummary": "共 15 个节点，已执行 12、跳过 2、改期 1。跳过集中在第 3 天。",
+  "summarySource": "template",
+  "profileSuggestion": null,
+  "review": null
 }
 ```
+
+- 统计只计入当前 `days` 中仍存在的节点；状态表中已被删除节点的行忽略。未标记节点单列为 `untouchedCount`，不并入跳过。
+- `skipRate` 为 0–1 的数值，保留四位小数；`totalCount` 为 0 时为 0。
+- `summarySource`：`template`（确定性模板，模型不可用时回落）或 `ai`（模型生成）。`ai` 摘要缓存在评价行上，重复打开摘要不重复调用模型；模板每次实时生成，不缓存。
+- `profileSuggestion`：确定性规则给出的画像建议，没有依据时为 `null`。已提交评价后以提交时落库的那一版为准；未提交时实时计算、不落库：
+
+```json
+{
+  "fields": { "pace": "relaxed" },
+  "reason": "本次行程跳过率较高且每日节点偏多，建议把节奏调整为轻松",
+  "confidence": 0.65
+}
+```
+
+  - 规则：跳过率 ≥ 30% 且日均节点 ≥ 5 时建议 `pace=relaxed`；上一本评价跳过率也 ≥ 30% 时 `confidence` 提升到 0.85；画像已是 `relaxed` 时不再建议。`fields` 仅可能出现 `pace` / `budgetLevel` / `interestTags` / `tripDays`。
+- `review` 为已提交的评价，未提交时 `null`。
+- 仅所有者且攻略为 `completed` 时可调用：非所有者 40301、不存在 40400、其他状态 40900。
 
 ### 11.2 提交评价
 
@@ -1192,7 +1212,7 @@ POST /api/guidebooks/generate
 
 ```json
 {
-  "guidebookId": "g50001",
+  "guidebookId": 50001,
   "overallScore": 5,
   "aiAccuracyScore": 4,
   "nodeExecutionScore": 5,
@@ -1200,6 +1220,37 @@ POST /api/guidebooks/generate
   "images": ["file-key-1"]
 }
 ```
+
+- `overallScore` 必填，1–5；`aiAccuracyScore` / `nodeExecutionScore` 可选，1–5；`content` 最多 1000 字；`images` 最多 9 个 `fileKey`（`§15.3` 上传能力接入前前端不展示入口）。
+- 同一用户对同一攻略重复提交走更新，`reviewId` 不变；不会重置画像迭代相关字段。
+
+响应 `data`（评价 + 提交时的统计快照）：
+
+```json
+{
+  "reviewId": 901,
+  "guidebookId": 50001,
+  "overallScore": 5,
+  "aiAccuracyScore": 4,
+  "nodeExecutionScore": 5,
+  "content": "很贴合我的节奏",
+  "images": ["file-key-1"],
+  "executedCount": 12,
+  "skippedCount": 2,
+  "rescheduledCount": 1,
+  "untouchedCount": 0,
+  "totalCount": 15,
+  "iterationStatus": "pending",
+  "profileVersionAfter": null,
+  "decidedAt": null,
+  "createdAt": "2026-10-21T20:00:00",
+  "updatedAt": "2026-10-21T20:00:00"
+}
+```
+
+- `iterationStatus`：`pending` / `accepted` / `rejected`；`profileVersionAfter` 仅在接受后非空，`decidedAt` 为决策时间。
+- 攻略未完成：40900；参数非法：40001；非所有者 40301；不存在 40400。
+- 并发重复提交由唯一索引兜底，后到者返回 40900。
 
 ### 11.3 确认画像迭代
 
@@ -1212,6 +1263,11 @@ POST /api/guidebooks/generate
 ```
 
 响应 `data`：`{ "profileVersion": 4 }`
+
+- `accept=true`：画像写入建议字段，版本 +1；评价行标记 `accepted`，并记录 `profileVersionAfter` 与 `decidedAt`。
+- `accept=false`：只标记 `rejected`，画像字段与版本都不变，返回当前版本。
+- 两个决策条件都必须满足：评价行的画像迭代仍为 `pending`，且画像版本仍是建议生成时看到的版本。任一不满足返回 40900（前端刷新后重试）。接受时画像更新失败会整体回滚，评价状态保持 `pending`。
+- 没有评价行 / 攻略不存在 40400；非所有者 40301；没有可确认的建议、建议已处理、建议字段不合法或画像版本冲突 40900；`accept` 缺失 40001。
 
 ---
 

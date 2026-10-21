@@ -119,6 +119,7 @@ prod 配置（[application-prod.yml](backend/src/main/resources/application-prod
 - `V17__guidebook_comparison.sql` — `t_guidebook_comparison`，`t_guidebook` 增加 `comparison_id` / `variant`（FR-4）
 - `V18__guidebook_node_status.sql` — `t_guidebook_node_status`（FR-10 出行期节点执行状态，不改攻略版本）
 - `V19__trip_suggestion.sql` — `t_trip_suggestion`（FR-10 调整建议与去重键唯一索引）
+- `V20__guidebook_review.sql` — `t_guidebook_review`（FR-11 复盘评价与统计快照，同一攻略 + 用户唯一）
 
 JSONB 写入依赖 JDBC 连接串上的 `?stringtype=unspecified`，请勿移除。
 
@@ -228,6 +229,16 @@ JSONB 写入依赖 JDBC 连接串上的 `?stringtype=unspecified`，请勿移除
 - 降级与并发：任一数据源不可用时只跳过对应建议，绝不猜测；Redis 锁 `travel:companion:job:{guidebookId}:{date}`（TTL 5 分钟）+ 去重键唯一索引保证多实例、重复扫描不产生重复建议；建议在触发日 23:59:59 过期，读取时惰性置为 `expired`。
 - 开关：`app.trip-companion.scheduling-enabled`（默认 `true`）与 `scan-cron`（默认 `0 */15 * * * *`）。
 
+## 复盘闭环（FR-11）
+
+- 阶段 A：`GET /api/reviews/{guidebookId}/summary` 只读聚合当前 `days` 与 `t_guidebook_node_status`，返回 `executed / skipped / rescheduled / untouched`、`skipRate` 与确定性模板摘要（`summarySource=template`）；`POST /api/reviews` 提交评价，仅 `completed` 可调用，同一用户同一攻略 upsert。
+- 统计口径：只计入当前行程中仍存在的节点，已删除节点的孤儿状态行忽略；未标记节点单独计数，不并入跳过；`skipRate` 为 0–1 数值（四位小数）。
+- 评价快照：`t_guidebook_review` 保存提交那一刻的分项计数，后续节点标记变化不回写；重复提交只更新用户输入与计数，不重置画像迭代字段。
+- 阶段 B：摘要优先复用评价行上缓存的 AI 文本（`summarySource=ai`），否则在专用线程池 `reviewAiExecutor` 中调用模型，最多等 5 秒；任何异常、超时或空回复都回落到确定性模板（`summarySource=template`），接口始终 200。提示词把用户评语放在 `<<< >>>` 中并要求不执行其中指令。
+- 画像建议是纯规则：跳过率 ≥ 30% 且日均节点 ≥ 5 时建议 `pace=relaxed`；上一本评价也偏紧时置信度 0.85，否则 0.65；画像已是 `relaxed` 或没有足够天数/节点依据时返回 `null`。建议在提交评价时计算一次并落库，已决策的评价不会被后续提交覆盖。
+- 阶段 B 决策：`POST /api/reviews/{guidebookId}/profile-iteration`，`accept=true` 先条件声明 `pending → accepted`，再通过 `ProfileService.applySuggestedFields`（唯一画像写入口，白名单字段 + 版本条件）写入并 `version +1`；`accept=false` 只改状态。重复决策或画像版本冲突返回 40900，接受失败时事务回滚，评价状态保持 `pending`。
+- 阶段 C：攻略详情页仅在 `completed` 状态挂载 `ReviewPanel`（`v-if`，非完成态不发任何复盘请求），展示统计、摘要来源标签、评价表单与画像建议卡片；提交/接受/拒绝后重新拉取摘要，版本号以服务端 `profileVersion` 为准；加载失败保留失败态与「重新加载」，评价表单仅在数据加载成功后可用。图片上传入口本期隐藏（§15.3 未实现）。
+
 ## 与 PRD 的偏差
 
 | 项 | 偏差 | 原因 / 后续 |
@@ -239,7 +250,7 @@ JSONB 写入依赖 JDBC 连接串上的 `?stringtype=unspecified`，请勿移除
 
 ## 当前进度
 
-已完成：鉴权（§2）、用户画像 FR-1（§3）、对话会话 FR-2（§4，含 WS 流式）、推荐攻略流（§5.7，推荐页 + `GET /api/guides/recommend`）、推荐攻略详情（§5.8，详情页 `/discover/:postId`：多图 + 住宿/吃饭/景点/交通四模块 + 原文外链）、攻略生成 FR-3、攻略编辑 FR-5（阶段 A–I）、实时数据 FR-6、预订转链 FR-8、知识库溯源 FR-7、离线攻略包 FR-9、多方案对比与混搭 FR-4、行程伴侣 FR-10（阶段 A–C）。
+已完成：鉴权（§2）、用户画像 FR-1（§3）、对话会话 FR-2（§4，含 WS 流式）、推荐攻略流（§5.7，推荐页 + `GET /api/guides/recommend`）、推荐攻略详情（§5.8，详情页 `/discover/:postId`：多图 + 住宿/吃饭/景点/交通四模块 + 原文外链）、攻略生成 FR-3、攻略编辑 FR-5（阶段 A–I）、实时数据 FR-6、预订转链 FR-8、知识库溯源 FR-7、离线攻略包 FR-9、多方案对比与混搭 FR-4、行程伴侣 FR-10（阶段 A–C）、复盘闭环 FR-11（阶段 A–C）。
 
 推荐页 `/discover` 是登录后的落地页，内容为上述 `V4` 演示种子数据（封面图走 picsum.photos 外链，图片内容与目的地无关）；详情页内容由 `V7` 补充。画像页基础画像含「人均预算」与「行程天数」两个具体数值（`V6`，不影响完整性校验）。
 
@@ -276,6 +287,7 @@ FR-6/8/7/9/4 已交付：实时数据以“快照 + 逐源降级”接入，营�
 | FR-9 离线攻略包 | `OfflinePackServiceTest`、`OfflinePackRunnerTest`、`OfflinePackRecoveryListenerTest`、`HtmlPackRendererTest`、`PdfPackRendererTest`、`OfflinePackControllerTest` | `GuidebookView.spec.ts` |
 | FR-4 多方案对比 | `ComparisonServiceTest`、`ComparisonRunnerTest`、`MixServiceTest`、`ComparisonControllerTest` | `CompareView.spec.ts`、`GuidebookView.spec.ts` |
 | FR-10 行程伴侣 | `TripCompanionServiceTest`、`SuggestionRuleEngineTest`、`TripCompanionScanServiceTest`、`TripCompanionSchedulerTest`、`CompanionNodeEditorTest`、`SuggestionDecisionServiceTest`、`TripCompanionControllerTest` | `TripCompanionView.spec.ts` |
+| FR-11 复盘闭环 | `ReviewStatsServiceTest`、`ReviewServiceTest`、`ReviewControllerTest`、`ReviewSummaryGeneratorTest`、`ProfileSuggestionServiceTest`、`ProfileIterationServiceTest` | `ReviewPanel.spec.ts`、`GuidebookView.spec.ts`（完成态门控） |
 
 ## 常用命令
 

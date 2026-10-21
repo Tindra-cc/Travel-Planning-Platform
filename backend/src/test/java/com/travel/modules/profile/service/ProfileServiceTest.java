@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -147,6 +148,76 @@ class ProfileServiceTest {
         service.updateProfile(new ProfileUpdateRequest());
 
         verify(userMapper, never()).updateById(any(User.class));
+    }
+
+    @Test
+    void applySuggestedFieldsUpdatesWhitelistedFieldsAndVersion() {
+        UserProfile existing = profile("balanced", "tight");
+        when(profileMapper.selectOne(any(Wrapper.class))).thenReturn(existing);
+        when(profileMapper.update(any(UserProfile.class), any(Wrapper.class))).thenReturn(1);
+
+        int version = service.applySuggestedFields(Map.of("pace", "relaxed"), 2);
+
+        ArgumentCaptor<UserProfile> captor = ArgumentCaptor.forClass(UserProfile.class);
+        verify(profileMapper).update(captor.capture(), any(Wrapper.class));
+        assertThat(version).isEqualTo(3);
+        assertThat(captor.getValue().getPace()).isEqualTo("relaxed");
+        assertThat(captor.getValue().getVersion()).isEqualTo(3);
+        assertThat(captor.getValue().getBudgetLevel()).isEqualTo("balanced");
+    }
+
+    @Test
+    void applySuggestedFieldsAcceptsTagsAndTripDays() {
+        UserProfile existing = profile("balanced", "tight");
+        when(profileMapper.selectOne(any(Wrapper.class))).thenReturn(existing);
+        when(profileMapper.update(any(UserProfile.class), any(Wrapper.class))).thenReturn(1);
+
+        service.applySuggestedFields(Map.of(
+                "interestTags", List.of("美食", "博物馆"),
+                "tripDays", 5), 2);
+
+        assertThat(existing.getInterestTags()).containsExactly("美食", "博物馆");
+        assertThat(existing.getTripDays()).isEqualTo(5);
+    }
+
+    @Test
+    void applySuggestedFieldsRejectsStaleVersion() {
+        UserProfile existing = profile("balanced", "tight");
+        when(profileMapper.selectOne(any(Wrapper.class))).thenReturn(existing);
+
+        assertBizCode(() -> service.applySuggestedFields(Map.of("pace", "relaxed"), 1),
+                ResultCode.CONFLICT);
+        verify(profileMapper, never()).update(any(UserProfile.class), any(Wrapper.class));
+    }
+
+    @Test
+    void applySuggestedFieldsRejectsUnknownField() {
+        UserProfile existing = profile("balanced", "tight");
+        when(profileMapper.selectOne(any(Wrapper.class))).thenReturn(existing);
+
+        assertBizCode(() -> service.applySuggestedFields(Map.of("nickname", "x"), 2),
+                ResultCode.CONFLICT);
+        verify(profileMapper, never()).update(any(UserProfile.class), any(Wrapper.class));
+    }
+
+    @Test
+    void applySuggestedFieldsRejectsInvalidEnum() {
+        UserProfile existing = profile("balanced", "tight");
+        when(profileMapper.selectOne(any(Wrapper.class))).thenReturn(existing);
+
+        assertBizCode(() -> service.applySuggestedFields(Map.of("pace", "slow"), 2),
+                ResultCode.CONFLICT);
+        verify(profileMapper, never()).update(any(UserProfile.class), any(Wrapper.class));
+    }
+
+    @Test
+    void applySuggestedFieldsMapsLostRaceToConflict() {
+        UserProfile existing = profile("balanced", "tight");
+        when(profileMapper.selectOne(any(Wrapper.class))).thenReturn(existing);
+        when(profileMapper.update(any(UserProfile.class), any(Wrapper.class))).thenReturn(0);
+
+        assertBizCode(() -> service.applySuggestedFields(Map.of("pace", "relaxed"), 2),
+                ResultCode.CONFLICT);
     }
 
     @Test

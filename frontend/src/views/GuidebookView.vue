@@ -314,6 +314,12 @@
         </div>
 
         <p v-if="detail.disclaimer" class="disclaimer">{{ detail.disclaimer }}</p>
+
+        <ReviewPanel
+          v-if="detail.status === 'completed'"
+          :guidebook-id="detail.guidebookId"
+          class="review-section"
+        />
       </div>
     </el-card>
 
@@ -551,6 +557,7 @@ import * as compareApi from '@/api/compare'
 import * as guidebookApi from '@/api/guidebook'
 import * as offlinePackApi from '@/api/offlinePack'
 import * as resourceApi from '@/api/resource'
+import ReviewPanel from '@/components/ReviewPanel.vue'
 import { openGuidebookSocket, type GuidebookProgressEvent } from '@/utils/guidebookWs'
 import type {
   BudgetBreakdown,
@@ -1729,6 +1736,9 @@ onBeforeUnmount(reset)
   margin: var(--space-4) 0 0;
   font-size: 12px;
   color: var(--text-3);
+}
+.review-section {
+  margin-top: var(--space-6);
 }
 
 .offline-hint {

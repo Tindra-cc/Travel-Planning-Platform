@@ -7,6 +7,7 @@ import GuidebookView from '@/views/GuidebookView.vue'
 import * as compareApi from '@/api/compare'
 import * as guidebookApi from '@/api/guidebook'
 import * as resourceApi from '@/api/resource'
+import * as reviewApi from '@/api/review'
 import { openGuidebookSocket } from '@/utils/guidebookWs'
 import type { GuidebookDetail } from '@/types/api'
 
@@ -38,6 +39,12 @@ vi.mock('@/api/compare', () => ({
   mixComparison: vi.fn()
 }))
 
+vi.mock('@/api/review', () => ({
+  getReviewSummary: vi.fn(),
+  submitReview: vi.fn(),
+  decideProfileIteration: vi.fn()
+}))
+
 vi.mock('@/utils/guidebookWs', () => ({
   openGuidebookSocket: vi.fn(() => ({ close: vi.fn() }))
 }))
@@ -54,6 +61,7 @@ const mockedSearchResources = vi.mocked(resourceApi.searchResources)
 const mockedBindResource = vi.mocked(resourceApi.bindResource)
 const mockedValidateLinks = vi.mocked(resourceApi.validateLinks)
 const mockedStartComparison = vi.mocked(compareApi.startComparison)
+const mockedReviewSummary = vi.mocked(reviewApi.getReviewSummary)
 
 function detail(overrides: Partial<GuidebookDetail>): GuidebookDetail {
   return {
@@ -120,6 +128,21 @@ describe('GuidebookView', () => {
     mockedValidateLinks.mockReset()
     mockedValidateLinks.mockResolvedValue({ results: [] })
     mockedStartComparison.mockReset()
+    mockedReviewSummary.mockReset()
+    mockedReviewSummary.mockResolvedValue({
+      guidebookId: '1',
+      status: 'completed',
+      totalCount: 0,
+      executedCount: 0,
+      skippedCount: 0,
+      rescheduledCount: 0,
+      untouchedCount: 0,
+      skipRate: 0,
+      aiSummary: '本次行程没有可统计的节点。',
+      summarySource: 'template',
+      profileSuggestion: null,
+      review: null
+    })
   })
 
   afterEach(() => {
@@ -616,6 +639,27 @@ describe('GuidebookView', () => {
     expect(mockedStartComparison).toHaveBeenCalledWith('1', ['budget', 'balanced', 'luxury'])
     expect(pushSpy).toHaveBeenCalledWith('/guidebook/compare/77')
     wrapper.unmount()
+  })
+
+  it('只在 completed 状态渲染复盘区并请求摘要', async () => {
+    mockedGet.mockResolvedValue(
+      detail({ status: 'confirmed', title: '成都三日', days: [{ day: 1, nodes: [] }] })
+    )
+
+    const first = await mountAt()
+
+    expect(first.wrapper.find('.review-panel').exists()).toBe(false)
+    expect(mockedReviewSummary).not.toHaveBeenCalled()
+    first.wrapper.unmount()
+
+    mockedGet.mockResolvedValue(
+      detail({ status: 'completed', title: '成都三日', days: [{ day: 1, nodes: [] }] })
+    )
+    const second = await mountAt()
+
+    expect(second.wrapper.find('.review-panel').exists()).toBe(true)
+    expect(mockedReviewSummary).toHaveBeenCalledWith('1')
+    second.wrapper.unmount()
   })
 
   it('已确认攻略仍可生成对比方案', async () => {

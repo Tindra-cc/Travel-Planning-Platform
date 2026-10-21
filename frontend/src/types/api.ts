@@ -537,3 +537,58 @@ export interface RefreshResult {
   guidebookId: string
   created: number
 }
+
+// ---- §11 FR-11 复盘反馈 ----
+export interface ProfileSuggestion {
+  /** 只可能出现 pace / budgetLevel / interestTags / tripDays */
+  fields: Record<string, unknown>
+  reason: string | null
+  confidence: number | null
+}
+
+export type ReviewIterationStatus = 'pending' | 'accepted' | 'rejected'
+
+export interface ReviewDto {
+  reviewId: string
+  guidebookId: string
+  overallScore: number
+  aiAccuracyScore: number | null
+  nodeExecutionScore: number | null
+  content: string | null
+  images: string[] | null
+  executedCount: number
+  skippedCount: number
+  rescheduledCount: number
+  untouchedCount: number
+  totalCount: number
+  iterationStatus: ReviewIterationStatus
+  profileVersionAfter: number | null
+  decidedAt: string | null
+  createdAt: string | null
+  updatedAt: string | null
+}
+
+export interface ReviewSummary {
+  guidebookId: string
+  status: string
+  totalCount: number
+  executedCount: number
+  skippedCount: number
+  rescheduledCount: number
+  untouchedCount: number
+  /** 0–1，展示时再换成百分比 */
+  skipRate: number
+  aiSummary: string
+  summarySource: 'ai' | 'template'
+  profileSuggestion: ProfileSuggestion | null
+  review: ReviewDto | null
+}
+
+export interface ReviewSubmitBody {
+  guidebookId: string
+  overallScore: number
+  aiAccuracyScore?: number | null
+  nodeExecutionScore?: number | null
+  content?: string | null
+  images?: string[]
+}
