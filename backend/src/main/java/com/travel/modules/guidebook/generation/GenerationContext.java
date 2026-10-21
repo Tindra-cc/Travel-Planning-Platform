@@ -10,6 +10,7 @@ import com.travel.modules.chat.dto.IntentDto;
 import com.travel.modules.guidebook.data.TravelDataSnapshot;
 import com.travel.modules.guidebook.dto.BudgetBreakdownDto;
 import com.travel.modules.guidebook.dto.GuidebookDayDto;
+import com.travel.modules.guidebook.dto.ReferenceGuidebook;
 import com.travel.modules.guidebook.knowledge.KnowledgeSnippet;
 
 import lombok.Data;
@@ -31,6 +32,8 @@ public class GenerationContext {
 
     /** FR-4：budget / balanced / luxury / mixed；普通生成为空 */
     private String variant;
+    /** FR-12：分享再生成的参考骨架；普通生成为 null */
+    private ReferenceGuidebook reference;
     /** 对比任务不持有普通生成锁，结束时不得误删他人的锁 */
     private boolean holdsGenerateLock = true;
 

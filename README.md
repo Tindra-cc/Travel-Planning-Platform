@@ -120,6 +120,7 @@ prod 配置（[application-prod.yml](backend/src/main/resources/application-prod
 - `V18__guidebook_node_status.sql` — `t_guidebook_node_status`（FR-10 出行期节点执行状态，不改攻略版本）
 - `V19__trip_suggestion.sql` — `t_trip_suggestion`（FR-10 调整建议与去重键唯一索引）
 - `V20__guidebook_review.sql` — `t_guidebook_review`（FR-11 复盘评价与统计快照，同一攻略 + 用户唯一）
+- `V21__guidebook_share.sql` — `t_guidebook_share`（FR-12 分享快照与短码）+ `t_guidebook.source_share_id`
 
 JSONB 写入依赖 JDBC 连接串上的 `?stringtype=unspecified`，请勿移除。
 
@@ -239,6 +240,22 @@ JSONB 写入依赖 JDBC 连接串上的 `?stringtype=unspecified`，请勿移除
 - 阶段 B 决策：`POST /api/reviews/{guidebookId}/profile-iteration`，`accept=true` 先条件声明 `pending → accepted`，再通过 `ProfileService.applySuggestedFields`（唯一画像写入口，白名单字段 + 版本条件）写入并 `version +1`；`accept=false` 只改状态。重复决策或画像版本冲突返回 40900，接受失败时事务回滚，评价状态保持 `pending`。
 - 阶段 C：攻略详情页仅在 `completed` 状态挂载 `ReviewPanel`（`v-if`，非完成态不发任何复盘请求），展示统计、摘要来源标签、评价表单与画像建议卡片；提交/接受/拒绝后重新拉取摘要，版本号以服务端 `profileVersion` 为准；加载失败保留失败态与「重新加载」，评价表单仅在数据加载成功后可用。图片上传入口本期隐藏（§15.3 未实现）。
 
+## 攻略分享（FR-12）
+
+- 阶段 A：`POST /api/guidebooks/{guidebookId}/share` 仅允许 `confirmed / executing / completed` 的攻略所有者创建分享；`channel` 支持 `link` / `qrcode`（`market` 本期返回 `42200`）。
+- 分享是**不可变快照**：创建时深拷贝 `days / budgetBreakdown / 贴士 / 免责声明 / 时效` 到 `t_guidebook_share.snapshot`，不包含画像快照、用户 ID、会话、对比方案等内部字段；之后编辑原攻略不影响已创建分享。
+- 短码是能力凭证：16 位 Base62（约 95 bit，`SecureRandom`），唯一索引兜底，插入冲突时重新生成并重试。
+- 幂等与版本：同一攻略 + 渠道 + 版本重复创建返回已有分享；版本变化先条件撤回旧分享（`status=revoked`，快照保留），再创建新快照。
+- 公开访问：`GET /api/share/{shareCode}` 无需登录（`/api/share/**` 放行），服务层不读取 `UserContext`；短码不存在 `40400`，已撤回/已过期 `40900`。
+- 撤回：`DELETE /api/guidebooks/{guidebookId}/share/{shareCode}` 只改状态，重复撤回幂等；非所有者 `40301`。
+- 配置：`app.share.base-url`（分享页地址）、`expire-days`（默认 30，0 表示不过期）、可选 `qrcode-url-template`（`{url}` 占位，未配置时 `qrcodeUrl=null`）。
+- 阶段 B：`POST /api/share/{shareCode}/regenerate` 位于公开前缀下但在服务层显式 `StpUtil.checkLogin()`；使用 `StpUtil.getLoginIdAsLong()` 而非 `UserContext`。新攻略归属接收者、绑定其 `ready_to_generate` 会话并记录 `source_share_id`，复用配额、`travel:gen:lock` 与生成池容量校验。
+- 参考骨架只保留每天的时间段、类型与地点名（最多 8 天 × 每天 8 个节点），不含备注、来源、坐标、资源绑定；提示词明确禁止照抄与引用参考来源，`citations` 只来自本次检索。
+- `dataFreshnessDiff` 基于分享快照判断：缺失、无法解析或超过 48 小时的节点返回 `new=pending_refresh`，仅提示不阻断生成。
+- 阶段 C：攻略页在 `confirmed / executing / completed` 显示「分享」入口（不可分享状态不渲染该动作）；`ShareDialog` 支持链接/二维码两种渠道、复制链接、展示二维码与撤回，关闭即重置，重复创建依赖后端同版本幂等返回同一短码。
+- 公开页 `/share/:shareCode` 带 `meta.public`，未登录可访问，只调用 `GET /api/share/{shareCode}` 并只读渲染逐日节点、预算与贴士，不渲染编辑、版本、收藏等入口；加载错误区分 `40400`（分享不存在）与 `40900`（已撤回/已过期）。
+- 「为我再生成」在点击时判断登录：未登录跳转 `/login?redirect=<encodeURIComponent(fullPath)>`，登录后回到同一分享；已登录只列出 `ready_to_generate` 会话，提交成功后展示 `dataFreshnessDiff`（`new` 显示为「待刷新」）并可跳转新攻略生成页。失败保留已选会话以便重试。
+
 ## 与 PRD 的偏差
 
 | 项 | 偏差 | 原因 / 后续 |
@@ -247,10 +264,11 @@ JSONB 写入依赖 JDBC 连接串上的 `?stringtype=unspecified`，请勿移除
 | FR-7 检索 | 仅关键词（`pg_trgm`），未接 Milvus / embedding | 接口已抽象为 `KnowledgeRetriever`，新增向量实现即可切换；`README` 与接口文档同步说明 |
 | FR-8 资源 | 使用本地资源目录与**演示种子数据** | 无真实供应商接口；转链、签名、可用性、时效均为真实实现，替换数据来源即可 |
 | FR-9 地图 | 静态地图为尽力而为，失败降级为坐标 + 链接 | 免费静态图服务可能限流或下线；地图缺失不影响攻略包其余内容 |
+| FR-12 分享渠道 | `market` 渠道未开放，返回 `42200` | 达人发布流程（FR-13/L3）尚未落地；链接与二维码分享已完整实现 |
 
 ## 当前进度
 
-已完成：鉴权（§2）、用户画像 FR-1（§3）、对话会话 FR-2（§4，含 WS 流式）、推荐攻略流（§5.7，推荐页 + `GET /api/guides/recommend`）、推荐攻略详情（§5.8，详情页 `/discover/:postId`：多图 + 住宿/吃饭/景点/交通四模块 + 原文外链）、攻略生成 FR-3、攻略编辑 FR-5（阶段 A–I）、实时数据 FR-6、预订转链 FR-8、知识库溯源 FR-7、离线攻略包 FR-9、多方案对比与混搭 FR-4、行程伴侣 FR-10（阶段 A–C）、复盘闭环 FR-11（阶段 A–C）。
+已完成：鉴权（§2）、用户画像 FR-1（§3）、对话会话 FR-2（§4，含 WS 流式）、推荐攻略流（§5.7，推荐页 + `GET /api/guides/recommend`）、推荐攻略详情（§5.8，详情页 `/discover/:postId`：多图 + 住宿/吃饭/景点/交通四模块 + 原文外链）、攻略生成 FR-3、攻略编辑 FR-5（阶段 A–I）、实时数据 FR-6、预订转链 FR-8、知识库溯源 FR-7、离线攻略包 FR-9、多方案对比与混搭 FR-4、行程伴侣 FR-10（阶段 A–C）、复盘闭环 FR-11（阶段 A–C）、攻略分享 FR-12（阶段 A–C）。
 
 推荐页 `/discover` 是登录后的落地页，内容为上述 `V4` 演示种子数据（封面图走 picsum.photos 外链，图片内容与目的地无关）；详情页内容由 `V7` 补充。画像页基础画像含「人均预算」与「行程天数」两个具体数值（`V6`，不影响完整性校验）。
 
@@ -288,6 +306,7 @@ FR-6/8/7/9/4 已交付：实时数据以“快照 + 逐源降级”接入，营�
 | FR-4 多方案对比 | `ComparisonServiceTest`、`ComparisonRunnerTest`、`MixServiceTest`、`ComparisonControllerTest` | `CompareView.spec.ts`、`GuidebookView.spec.ts` |
 | FR-10 行程伴侣 | `TripCompanionServiceTest`、`SuggestionRuleEngineTest`、`TripCompanionScanServiceTest`、`TripCompanionSchedulerTest`、`CompanionNodeEditorTest`、`SuggestionDecisionServiceTest`、`TripCompanionControllerTest` | `TripCompanionView.spec.ts` |
 | FR-11 复盘闭环 | `ReviewStatsServiceTest`、`ReviewServiceTest`、`ReviewControllerTest`、`ReviewSummaryGeneratorTest`、`ProfileSuggestionServiceTest`、`ProfileIterationServiceTest` | `ReviewPanel.spec.ts`、`GuidebookView.spec.ts`（完成态门控） |
+| FR-12 攻略分享 | `ShareSnapshotBuilderTest`、`ShareServiceTest`、`ShareControllerTest`、`ShareCodeTest`、`ShareReferenceBuilderTest`、`ShareFreshnessServiceTest`、`ShareRegenerationServiceTest`、`PromptAssemblyStepTest` | `ShareDialog.spec.ts`、`ShareView.spec.ts`、`GuidebookView.spec.ts`（分享入口门控） |
 
 ## 常用命令
 

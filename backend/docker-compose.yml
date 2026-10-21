@@ -66,6 +66,10 @@ services:
       FLIGHT_PRICE_URL: ${FLIGHT_PRICE_URL:-}
       HOTEL_PRICE_URL: ${HOTEL_PRICE_URL:-}
       PRICE_SOURCE_TOKEN: ${PRICE_SOURCE_TOKEN:-}
+      # FR-12 分享公开页地址；生产应填真实前端域名
+      SHARE_BASE_URL: ${SHARE_BASE_URL:-http://localhost}
+      SHARE_EXPIRE_DAYS: ${SHARE_EXPIRE_DAYS:-30}
+      SHARE_QRCODE_URL_TEMPLATE: ${SHARE_QRCODE_URL_TEMPLATE:-}
     volumes:
       - offline-packs:/app/data/offline-packs
     ports:

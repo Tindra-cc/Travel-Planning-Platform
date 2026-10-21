@@ -91,6 +91,12 @@ app:
   offline-pack:
     storage-dir: ${OFFLINE_PACK_DIR:./data/offline-packs}
     expire-hours: 72
+  share:
+    # 前端公开页地址；分享链接由它拼出
+    base-url: ${SHARE_BASE_URL:http://localhost:5173}
+    # 0 表示不过期
+    expire-days: ${SHARE_EXPIRE_DAYS:30}
+    qrcode-url-template: ${SHARE_QRCODE_URL_TEMPLATE:}
   travel-data:
     # 价格源未配置时对应数据块标记 unavailable，绝不编造价格
     flight-price-url: ${FLIGHT_PRICE_URL:}

@@ -310,6 +310,7 @@
           <el-button @click="onExport('markdown')">导出 Markdown</el-button>
           <el-button @click="onExport('html')">导出 HTML</el-button>
           <el-button @click="openOfflinePack">离线包</el-button>
+          <el-button v-if="shareable" @click="shareDialog = true">分享</el-button>
           <el-button type="danger" plain :loading="deleting" @click="onDelete">删除攻略</el-button>
         </div>
 
@@ -545,6 +546,12 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <ShareDialog
+      v-if="detail"
+      v-model="shareDialog"
+      :guidebook-id="detail.guidebookId"
+    />
   </div>
 </template>
 
@@ -558,6 +565,7 @@ import * as guidebookApi from '@/api/guidebook'
 import * as offlinePackApi from '@/api/offlinePack'
 import * as resourceApi from '@/api/resource'
 import ReviewPanel from '@/components/ReviewPanel.vue'
+import ShareDialog from '@/components/ShareDialog.vue'
 import { openGuidebookSocket, type GuidebookProgressEvent } from '@/utils/guidebookWs'
 import type {
   BudgetBreakdown,
@@ -630,6 +638,7 @@ const DEGRADE_LABELS: Record<string, string> = {
   data_unavailable: '部分实时数据缺失'
 }
 const EDITABLE_STATUSES = ['draft', 'editing']
+const SHAREABLE_STATUSES = ['confirmed', 'executing', 'completed']
 const TIME_PATTERN = /^\d{2}:\d{2}$/
 const RESOURCE_TYPE_LABELS: Record<string, string> = {
   flight: '机票',
@@ -702,6 +711,7 @@ const offlineStatus = ref<string | null>(null)
 const offlineError = ref<string | null>(null)
 const offlineCreating = ref(false)
 const offlineDownloading = ref(false)
+const shareDialog = ref(false)
 
 const resourceDialog = ref(false)
 const resourceSearching = ref(false)
@@ -719,6 +729,9 @@ let offlinePollStartedAt = 0
 const editable = computed(() => EDITABLE_STATUSES.includes(detail.value?.status ?? ''))
 const canCompare = computed(() =>
   ['draft', 'editing', 'confirmed'].includes(detail.value?.status ?? '')
+)
+const shareable = computed(() =>
+  SHAREABLE_STATUSES.includes(detail.value?.status ?? '')
 )
 const canUseCompanion = computed(() =>
   ['confirmed', 'executing'].includes(detail.value?.status ?? '')
@@ -1413,6 +1426,7 @@ function reset() {
   stopPolling()
   stopOfflinePolling()
   offlineDialog.value = false
+  shareDialog.value = false
   detail.value = null
   days.value = []
   activeDay.value = '1'

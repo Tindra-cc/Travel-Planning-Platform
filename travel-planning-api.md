@@ -1283,23 +1283,36 @@ POST /api/guidebooks/generate
 { "channel": "link" }
 ```
 
-`channel` 枚举：`link` / `qrcode` / `market`（`market` 仅 L3）。
+`channel` 枚举：本期仅支持 `link` / `qrcode`；`market` 返回 `42200`（由达人发布流程提供），其它值返回 `40001`。
 
 响应 `data`：
 
 ```json
 {
-  "shareId": "sh90001",
-  "shareUrl": "https://.../share/sh90001",
-  "qrcodeUrl": "https://.../qrcode/sh90001.png"
+  "shareId": "Xk3pQ9mZr2Lw7BcT",
+  "shareUrl": "https://.../share/Xk3pQ9mZr2Lw7BcT",
+  "qrcodeUrl": null
 }
 ```
+
+- `shareId` 是 16 位 Base62 短码（约 95 bit，`SecureRandom` 生成），不是数字 ID；`shareUrl` 由 `app.share.base-url` 拼接。
+- `qrcodeUrl` 仅在配置 `app.share.qrcode-url-template`（使用 `{url}` 占位）时返回，否则为 `null`。
+- 可分享状态仅 `confirmed / executing / completed`，其它状态返回 `40900`。
+- 幂等：同一攻略 + 渠道 + 当前版本重复创建返回已有分享；攻略版本变化时先撤回旧分享，再创建新快照。
+- 快照创建后不可变，不包含画像、用户 ID、会话与对比等内部字段。
+- 过期时间由 `app.share.expire-days` 决定（默认 30 天，0 表示不过期）。
+- 错误码：未登录 `40100`、非所有者 `40301`、攻略不存在 `40400`、状态不支持 `40900`、`market` 渠道 `42200`、缺失 `channel` `40001`。
 
 ### 12.2 获取分享攻略（公开）
 
 **GET** `/api/share/{shareId}`
 
-> 无需登录，返回只读副本（不含原始画像）。
+> 无需登录（`/api/share/**` 已放行），返回只读快照，绝不含原始画像、`ownerId`、会话或对比信息。
+
+响应 `data` 主要字段：`shareCode`、`title`、`guidebookVersion`、`sharedAt`、`expiresAt`、`days`、`budgetBreakdown`、`packingList`、`culturalTips`、`pitfallTips`、`disclaimer`、`degradedMode`、`travelDataAt`。
+
+- 短码不存在返回 `40400`；已撤回或已过期返回 `40900`（先按短码查询，才能区分二者）。
+- 公开读取不读取用户上下文，未登录请求不会触发 `40100`。
 
 ### 12.3 基于分享再生成
 
@@ -1320,14 +1333,24 @@ POST /api/guidebooks/generate
   "guidebookId": "g50010",
   "status": "generating",
   "dataFreshnessDiff": [
-    { "nodeId": "n1", "old": "2026-08-01", "new": "2026-11-01" }
+    { "nodeId": "n1", "old": "2026-08-01", "new": "pending_refresh" }
   ]
 }
 ```
 
+- 该接口位于公开前缀 `/api/share/**` 下，但**必须登录**：服务层显式 `StpUtil.checkLogin()`，未登录返回 `40100`。
+- 分享不存在 `40400`；已撤回/已过期 `40900`；会话不属于本人 `40301`；会话未就绪 `42200`；会话已有活跃攻略 `40900`；配额用尽或已有生成任务 `42900`。
+- 新攻略归属接收者（`user_id` 来自登录态），`source_share_id` 记录来源分享，`session_id` 为请求中的会话；原分享与快照不变。
+- 参考内容只进入提示词（时间、类型、地点名），新攻略的 `citations` 只来自本次生成；生成失败沿用普通生成的失败链路。
+- `dataFreshnessDiff` 只提示、不阻断：节点数据缺失、无法解析或超过 48 小时时输出，`new` 固定为 `pending_refresh`（新数据尚未采集）；48 小时内不输出。
+
 ### 12.4 撤回分享
 
 **DELETE** `/api/guidebooks/{guidebookId}/share/{shareId}`
+
+- 需登录且为分享所有者；只把 `status` 置为 `revoked`，快照保留用于审计。
+- 重复撤回幂等（仍返回 200）；短码不存在 `40400`，非所有者 `40301`。
+- 撤回后公开读取返回 `40900`；再次创建同渠道分享会生成新短码。
 
 ---
 

@@ -592,3 +592,42 @@ export interface ReviewSubmitBody {
   content?: string | null
   images?: string[]
 }
+
+// ---- §12 FR-12 分享与再生成 ----
+
+export interface ShareCreateResponse {
+  /** 短码，不是数字 ID */
+  shareId: string
+  shareUrl: string
+  qrcodeUrl: string | null
+}
+
+export interface SharedGuidebook {
+  shareCode: string
+  title: string | null
+  guidebookVersion: number | null
+  sharedAt: string | null
+  expiresAt: string | null
+  days: GuidebookDay[] | null
+  budgetBreakdown: BudgetBreakdown | null
+  packingList: string[] | null
+  culturalTips: string[] | null
+  pitfallTips: string[] | null
+  disclaimer: string | null
+  degradedMode: boolean | null
+  travelDataAt: string | null
+}
+
+export interface FreshnessDiffItem {
+  nodeId: string
+  /** 分享快照里的采集时间；缺失时为空 */
+  old: string | null
+  /** 后端当前恒为 pending_refresh */
+  new: string
+}
+
+export interface RegenerateResponse {
+  guidebookId: string
+  status: string
+  dataFreshnessDiff: FreshnessDiffItem[]
+}

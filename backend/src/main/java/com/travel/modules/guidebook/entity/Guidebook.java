@@ -81,4 +81,7 @@ public class Guidebook extends BaseEntity {
     private Long comparisonId;
     /** budget / balanced / luxury / mixed */
     private String variant;
+
+    /** FR-12：再生成来源分享；普通攻略为 null */
+    private Long sourceShareId;
 }

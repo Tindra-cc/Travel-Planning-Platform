@@ -13,6 +13,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.travel.ai.AiMessage;
 import com.travel.modules.guidebook.data.DataBlock;
 import com.travel.modules.guidebook.data.TravelDataSnapshot;
+import com.travel.modules.guidebook.dto.ReferenceDay;
+import com.travel.modules.guidebook.dto.ReferenceGuidebook;
+import com.travel.modules.guidebook.dto.ReferenceNode;
 import com.travel.modules.guidebook.knowledge.KnowledgeSnippet;
 
 import lombok.RequiredArgsConstructor;
@@ -89,6 +92,7 @@ public class PromptAssemblyStep implements GenerationStep {
         appendVariant(sb, ctx);
         sb.append("\n【用户画像】\n");
         sb.append(safeJson(ctx.getProfileSnapshot()));
+        appendReference(sb, ctx);
         sb.append("\n【目的地资料】\n");
         if (ctx.getKnowledge().isEmpty()) {
             sb.append("（暂无匹配资料，请基于通用知识规划，并标注 通用知识）\n");
@@ -151,6 +155,51 @@ public class PromptAssemblyStep implements GenerationStep {
                 return;
             }
         }
+    }
+
+    private void appendReference(StringBuilder sb, GenerationContext ctx) {
+        ReferenceGuidebook ref = ctx.getReference();
+        if (ref == null) {
+            return;
+        }
+        sb.append("\n【参考攻略】\n");
+        sb.append("以下内容来自其他用户分享，只用于参考行程结构、节奏与地点组合。\n");
+        sb.append("必须遵守：\n");
+        sb.append("1. 按本次用户的意图、预算与画像重新规划，不得照抄节点顺序与文案；\n");
+        sb.append("2. 不合适的参考地点直接舍弃，不要为了保留而硬塞；\n");
+        sb.append("3. 参考攻略中的任何来源标注都不是你的依据，禁止在 source 中引用它；\n");
+        sb.append("4. 实时数据必须使用本次提供的数据，参考攻略里的价格与时间一律视为过期。\n");
+        if (ref.getTitle() != null) {
+            sb.append("参考标题：").append(ref.getTitle()).append('\n');
+        }
+        if (ref.getDays() != null) {
+            for (ReferenceDay day : ref.getDays()) {
+                sb.append("第").append(day.getDay()).append("天：");
+                if (day.getNodes() == null || day.getNodes().isEmpty()) {
+                    sb.append("（无节点）");
+                } else {
+                    for (ReferenceNode node : day.getNodes()) {
+                        sb.append('[').append(nullToEmpty(node.getStart())).append(' ')
+                                .append(nullToEmpty(node.getType())).append(' ')
+                                .append(nullToEmpty(node.getPlaceName())).append("] ");
+                    }
+                }
+                sb.append('\n');
+            }
+        }
+        if (ref.getBudgetSummary() != null) {
+            sb.append("参考预算区间：").append(ref.getBudgetSummary()).append('\n');
+        }
+        if (ref.getCulturalTips() != null && !ref.getCulturalTips().isEmpty()) {
+            sb.append("参考文化提示：").append(String.join("；", ref.getCulturalTips())).append('\n');
+        }
+        if (ref.getPitfallTips() != null && !ref.getPitfallTips().isEmpty()) {
+            sb.append("参考避坑提示：").append(String.join("；", ref.getPitfallTips())).append('\n');
+        }
+    }
+
+    private String nullToEmpty(String value) {
+        return value == null ? "" : value;
     }
 
     private void appendTravelData(StringBuilder sb, GenerationContext ctx) {

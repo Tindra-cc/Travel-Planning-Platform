@@ -34,6 +34,7 @@ import com.travel.modules.guidebook.dto.GuidebookDayDto;
 import com.travel.modules.guidebook.dto.GuidebookDetailResponse;
 import com.travel.modules.guidebook.dto.GuidebookListItem;
 import com.travel.modules.guidebook.dto.GuidebookNodeDto;
+import com.travel.modules.guidebook.dto.ReferenceGuidebook;
 import com.travel.modules.guidebook.entity.Guidebook;
 import com.travel.modules.guidebook.generation.GenerationContext;
 import com.travel.modules.guidebook.generation.GuidebookGenerationRunner;
@@ -52,7 +53,7 @@ public class GuidebookService {
     private static final int ESTIMATED_SECONDS = 30;
     private static final int MAX_ATTEMPTS = 3;
     private static final String LOCK_PREFIX = "travel:gen:lock:";
-    private static final String DISCLAIMER =
+    public static final String DISCLAIMER =
             "攻略由 AI 辅助生成，请出行前核实开放时间、票价与天气。";
     private static final List<String> ACTIVE_STATUSES = List.of(
             Guidebook.STATUS_GENERATING, Guidebook.STATUS_DRAFT,
@@ -118,6 +119,55 @@ public class GuidebookService {
                 runner.submit(ctx);
             } catch (RuntimeException e) {
                 log.warn("生成任务提交失败 guidebookId={}: {}", guidebook.getId(), e.getMessage());
+                markSubmitFailed(guidebook.getId(), sessionId);
+                throw new BizException(ResultCode.TOO_MANY_REQUEST, "生成任务繁忙，请稍后再试");
+            }
+            return new GenerateGuidebookResponse(guidebook.getId(), Guidebook.STATUS_GENERATING,
+                    ESTIMATED_SECONDS);
+        } catch (RuntimeException e) {
+            redisTemplate.delete(lockKey);
+            throw e;
+        }
+    }
+
+    /** FR-12：基于分享再生成；调用方已完成登录校验，userId 显式传入。 */
+    public GenerateGuidebookResponse generateWithReference(Long userId, Long sessionId,
+            ReferenceGuidebook reference, Long sourceShareId) {
+        ChatSession session = requireOwnedSession(sessionId, userId);
+        if (findActiveBySession(sessionId) != null) {
+            throw new BizException(ResultCode.CONFLICT, "该会话已有攻略，请先处理");
+        }
+        if (!ChatSession.STATUS_READY.equals(session.getStatus())) {
+            throw new BizException(ResultCode.UNPROCESSABLE, "当前会话尚未就绪，无法生成攻略");
+        }
+        IntentDto intent = session.getIntent();
+        requireCompleteIntent(intent);
+
+        String lockKey = LOCK_PREFIX + userId;
+        Boolean locked = redisTemplate.opsForValue()
+                .setIfAbsent(lockKey, "1", Duration.ofSeconds(180));
+        if (!Boolean.TRUE.equals(locked)) {
+            throw new BizException(ResultCode.TOO_MANY_REQUEST, "已有生成任务进行中，请稍后再试");
+        }
+
+        try {
+            if (!runner.hasCapacity()) {
+                throw new BizException(ResultCode.TOO_MANY_REQUEST, "生成任务繁忙，请稍后再试");
+            }
+            Map<String, Object> snapshot = loadProfileSnapshot(userId);
+            Guidebook guidebook = transactionTemplate.execute(status -> {
+                Guidebook created = createGuidebook(userId, sessionId, intent, snapshot,
+                        sourceShareId);
+                markSessionGenerating(sessionId, created.getId());
+                return created;
+            });
+            GenerationContext ctx = new GenerationContext(guidebook.getId(), userId, sessionId,
+                    intent, snapshot);
+            ctx.setReference(reference);
+            try {
+                runner.submit(ctx);
+            } catch (RuntimeException e) {
+                log.warn("再生成任务提交失败 guidebookId={}: {}", guidebook.getId(), e.getMessage());
                 markSubmitFailed(guidebook.getId(), sessionId);
                 throw new BizException(ResultCode.TOO_MANY_REQUEST, "生成任务繁忙，请稍后再试");
             }
@@ -308,11 +358,17 @@ public class GuidebookService {
 
     private Guidebook createGuidebook(Long userId, Long sessionId, IntentDto intent,
             Map<String, Object> snapshot) {
+        return createGuidebook(userId, sessionId, intent, snapshot, null);
+    }
+
+    private Guidebook createGuidebook(Long userId, Long sessionId, IntentDto intent,
+            Map<String, Object> snapshot, Long sourceShareId) {
         consumeQuotaOnce(userId);
 
         Guidebook guidebook = new Guidebook();
         guidebook.setUserId(userId);
         guidebook.setSessionId(sessionId);
+        guidebook.setSourceShareId(sourceShareId);
         guidebook.setStatus(Guidebook.STATUS_GENERATING);
         guidebook.setVersion(1);
         guidebook.setIntent(intent);

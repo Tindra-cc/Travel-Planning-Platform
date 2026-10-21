@@ -77,6 +77,10 @@ app:
   offline-pack:
     storage-dir: ${OFFLINE_PACK_DIR:/app/data/offline-packs}
     expire-hours: 72
+  share:
+    base-url: ${SHARE_BASE_URL:https://travel.example.com}
+    expire-days: ${SHARE_EXPIRE_DAYS:30}
+    qrcode-url-template: ${SHARE_QRCODE_URL_TEMPLATE:}
   travel-data:
     flight-price-url: ${FLIGHT_PRICE_URL:}
     hotel-price-url: ${HOTEL_PRICE_URL:}

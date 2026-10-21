@@ -4,6 +4,7 @@ import { createRouter, createMemoryHistory, type Router } from 'vue-router'
 import ElementPlus, { ElMessageBox } from 'element-plus'
 import { VueDraggable } from 'vue-draggable-plus'
 import GuidebookView from '@/views/GuidebookView.vue'
+import ShareDialog from '@/components/ShareDialog.vue'
 import * as compareApi from '@/api/compare'
 import * as guidebookApi from '@/api/guidebook'
 import * as resourceApi from '@/api/resource'
@@ -43,6 +44,13 @@ vi.mock('@/api/review', () => ({
   getReviewSummary: vi.fn(),
   submitReview: vi.fn(),
   decideProfileIteration: vi.fn()
+}))
+
+vi.mock('@/api/share', () => ({
+  createShare: vi.fn(),
+  revokeShare: vi.fn(),
+  getSharedGuidebook: vi.fn(),
+  regenerateFromShare: vi.fn()
 }))
 
 vi.mock('@/utils/guidebookWs', () => ({
@@ -670,6 +678,55 @@ describe('GuidebookView', () => {
     const { wrapper } = await mountAt()
 
     expect(wrapper.text()).toContain('生成对比方案')
+    wrapper.unmount()
+  })
+
+  it('已确认、行程中、已完成状态显示分享入口', async () => {
+    for (const status of ['confirmed', 'executing', 'completed']) {
+      mockedGet.mockResolvedValue(
+        detail({ status, title: '成都三日', days: [{ day: 1, nodes: [] }] })
+      )
+
+      const { wrapper } = await mountAt()
+
+      expect(
+        wrapper.findAll('button').some((b) => b.text() === '分享'),
+        `${status} 应显示分享入口`
+      ).toBe(true)
+      wrapper.unmount()
+    }
+  })
+
+  it('草稿与生成中不显示分享入口', async () => {
+    for (const status of ['draft', 'generating']) {
+      mockedGet.mockResolvedValue(detail({ status }))
+
+      const { wrapper } = await mountAt()
+
+      expect(
+        wrapper.findAll('button').some((b) => b.text() === '分享'),
+        `${status} 不应显示分享入口`
+      ).toBe(false)
+      wrapper.unmount()
+    }
+  })
+
+  it('点击分享打开弹窗并传入当前攻略 ID', async () => {
+    mockedGet.mockResolvedValue(
+      detail({ status: 'confirmed', title: '成都三日', days: [{ day: 1, nodes: [] }] })
+    )
+
+    const { wrapper } = await mountAt()
+
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === '分享')!
+      .trigger('click')
+    await flushPromises()
+
+    const dialog = wrapper.findComponent(ShareDialog)
+    expect(dialog.exists()).toBe(true)
+    expect(dialog.props('guidebookId')).toBe('1')
     wrapper.unmount()
   })
 })

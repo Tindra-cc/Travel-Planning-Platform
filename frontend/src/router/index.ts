@@ -15,6 +15,13 @@ const router = createRouter({
       meta: { public: true }
     },
     {
+      // 公开只读分享页：未登录也能看，因此必须放在守卫白名单里
+      path: '/share/:shareCode',
+      name: 'share',
+      component: () => import('@/views/ShareView.vue'),
+      meta: { public: true }
+    },
+    {
       path: '/discover',
       name: 'discover',
       component: () => import('@/views/DiscoverView.vue')

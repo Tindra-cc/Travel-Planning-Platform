@@ -7,13 +7,14 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 
 import com.travel.ai.AiProperties;
 import com.travel.ai.DashScopeProperties;
+import com.travel.modules.guidebook.config.ShareProperties;
 import com.travel.modules.guidebook.data.TravelDataProperties;
 import com.travel.modules.guidebook.offline.OfflinePackProperties;
 
 @SpringBootApplication
 @MapperScan("com.travel.modules.*.mapper")
 @EnableConfigurationProperties({ AiProperties.class, DashScopeProperties.class,
-		OfflinePackProperties.class, TravelDataProperties.class })
+		OfflinePackProperties.class, TravelDataProperties.class, ShareProperties.class })
 public class TravelApplication {
 
 	public static void main(String[] args) {

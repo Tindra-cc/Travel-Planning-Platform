@@ -23,7 +23,8 @@ public class SaTokenConfig implements WebMvcConfigurer {
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html",
-            "/api/ws/**" // WebSocket 在握手阶段单独校验 token
+            "/api/ws/**", // WebSocket 在握手阶段单独校验 token
+            "/api/share/**" // FR-12 公开分享；阶段 B 的 regenerate 在服务层显式校验登录
     };
 
     @Override
