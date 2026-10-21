@@ -9,3 +9,7 @@ docs/
 Sprint1-review.md
 sprint1-c4.html
 frontend/src/views/SprintReviewDemo.vue
+
+# MCP 配置（含服务器口令/API Key，不入库）
+.mcp.json
+mcp.json

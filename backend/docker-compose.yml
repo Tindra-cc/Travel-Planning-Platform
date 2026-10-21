@@ -58,8 +58,10 @@ services:
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost}
       # FR-8 转链签名；留空则使用进程内随机密钥（重启后旧转链失效）
       LINK_SIGNING_SECRET: ${LINK_SIGNING_SECRET:-}
-      # FR-7 / FR-6 运营接口白名单（逗号分隔用户 ID）
+      # FR-6 / FR-7 / FR-13 运营与达人白名单（逗号分隔用户 ID）
       ADMIN_USER_IDS: ${ADMIN_USER_IDS:-}
+      # FR-13 达人分成比例
+      EXPERT_COMMISSION_RATE: ${EXPERT_COMMISSION_RATE:-0.2}
       # FR-9 离线包目录，挂载命名卷保证重启不丢文件
       OFFLINE_PACK_DIR: ${OFFLINE_PACK_DIR:-/app/data/offline-packs}
       # FR-6 可选价格源；留空则对应数据块标记 unavailable
@@ -70,6 +72,9 @@ services:
       SHARE_BASE_URL: ${SHARE_BASE_URL:-http://localhost}
       SHARE_EXPIRE_DAYS: ${SHARE_EXPIRE_DAYS:-30}
       SHARE_QRCODE_URL_TEMPLATE: ${SHARE_QRCODE_URL_TEMPLATE:-}
+      # FR-10 行程伴侣定时扫描（refresh 接口不受开关影响）
+      TRIP_COMPANION_SCHEDULING: ${TRIP_COMPANION_SCHEDULING:-true}
+      TRIP_COMPANION_SCAN_CRON: ${TRIP_COMPANION_SCAN_CRON:-0 */15 * * * *}
     volumes:
       - offline-packs:/app/data/offline-packs
     ports:

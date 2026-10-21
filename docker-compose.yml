@@ -72,6 +72,9 @@ services:
       SHARE_BASE_URL: ${SHARE_BASE_URL:-http://localhost}
       SHARE_EXPIRE_DAYS: ${SHARE_EXPIRE_DAYS:-30}
       SHARE_QRCODE_URL_TEMPLATE: ${SHARE_QRCODE_URL_TEMPLATE:-}
+      # FR-10 行程伴侣定时扫描（refresh 接口不受开关影响）
+      TRIP_COMPANION_SCHEDULING: ${TRIP_COMPANION_SCHEDULING:-true}
+      TRIP_COMPANION_SCAN_CRON: ${TRIP_COMPANION_SCAN_CRON:-0 */15 * * * *}
     volumes:
       - offline-packs:/app/data/offline-packs
     ports:
