@@ -13,4 +13,6 @@ public class CurrentUserResponse {
     private Boolean profileCompleted;
     private Integer dailyGenerateQuota;
     private Integer dailyGenerateUsed;
+    /** 仅用于前端展示入口，实时门禁仍由 L3AccessPolicy 在服务端判断。 */
+    private Boolean expertEligible;
 }

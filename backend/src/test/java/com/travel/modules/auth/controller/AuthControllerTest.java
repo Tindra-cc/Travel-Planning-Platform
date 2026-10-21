@@ -131,12 +131,13 @@ class AuthControllerTest {
     @Test
     void meReturnsQuota() throws Exception {
         when(authService.me())
-                .thenReturn(new CurrentUserResponse(1L, "旅行者", "L1", false, 3, 1));
+                .thenReturn(new CurrentUserResponse(1L, "旅行者", "L1", false, 3, 1, false));
 
         mvc.perform(get("/api/auth/me"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.dailyGenerateQuota").value(3))
-                .andExpect(jsonPath("$.data.dailyGenerateUsed").value(1));
+                .andExpect(jsonPath("$.data.dailyGenerateUsed").value(1))
+                .andExpect(jsonPath("$.data.expertEligible").value(false));
     }
 }

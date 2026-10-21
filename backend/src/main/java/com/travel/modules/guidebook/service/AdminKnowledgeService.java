@@ -31,6 +31,7 @@ public class AdminKnowledgeService {
 
     private final KnowledgeDocMapper knowledgeDocMapper;
     private final GuidePostMapper guidePostMapper;
+    private final GuideKnowledgeIngestionService ingestionService;
 
     public PageResult<KnowledgeDocItem> list(String status, int page, int pageSize) {
         LambdaQueryWrapper<KnowledgeDoc> query = new LambdaQueryWrapper<KnowledgeDoc>()
@@ -71,49 +72,17 @@ public class AdminKnowledgeService {
         if (post == null) {
             throw new BizException(ResultCode.NOT_FOUND, "攻略不存在");
         }
-        KnowledgeDoc existing = knowledgeDocMapper.selectOne(
-                new LambdaQueryWrapper<KnowledgeDoc>()
-                        .eq(KnowledgeDoc::getSourceType, KnowledgeDoc.SOURCE_TYPE_GUIDE)
-                        .eq(KnowledgeDoc::getSourceRefId, postId));
-
         if (!approved) {
             post.setReviewStatus(GuidePost.REVIEW_REJECTED);
             guidePostMapper.updateById(post);
-            if (existing != null) {
-                existing.setStatus(KnowledgeDoc.STATUS_REJECTED);
-                existing.setReviewedBy(userId);
-                existing.setReviewedAt(LocalDateTime.now());
-                knowledgeDocMapper.updateById(existing);
-            }
             return new KnowledgeReviewResponse(postId, GuidePost.REVIEW_REJECTED,
-                    existing == null ? null : existing.getId());
+                    ingestionService.reject(postId, userId));
         }
 
         post.setReviewStatus(GuidePost.REVIEW_APPROVED);
         guidePostMapper.updateById(post);
-
-        KnowledgeDoc doc = existing == null ? new KnowledgeDoc() : existing;
-        doc.setDestination(post.getDestination());
-        doc.setDocType("guide");
-        doc.setTitle(post.getTitle());
-        doc.setContent(StringUtils.hasText(post.getSummary()) ? post.getSummary() : post.getTitle());
-        doc.setTags(post.getTags());
-        doc.setSourceName(post.getAuthorName());
-        doc.setSourceUrl(post.getSourceUrl());
-        doc.setStatus(KnowledgeDoc.STATUS_APPROVED);
-        doc.setSourceType(KnowledgeDoc.SOURCE_TYPE_GUIDE);
-        doc.setSourceRefId(postId);
-        doc.setReviewedBy(userId);
-        doc.setReviewedAt(LocalDateTime.now());
-        if (doc.getSortWeight() == null) {
-            doc.setSortWeight(0);
-        }
-        if (existing == null) {
-            knowledgeDocMapper.insert(doc);
-        } else {
-            knowledgeDocMapper.updateById(doc);
-        }
-        return new KnowledgeReviewResponse(postId, GuidePost.REVIEW_APPROVED, doc.getId());
+        return new KnowledgeReviewResponse(postId, GuidePost.REVIEW_APPROVED,
+                ingestionService.ingest(post, userId));
     }
 
     private KnowledgeDocItem toItem(KnowledgeDoc doc) {

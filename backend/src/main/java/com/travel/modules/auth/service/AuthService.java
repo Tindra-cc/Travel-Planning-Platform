@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.travel.common.BizException;
 import com.travel.common.ClientIpResolver;
+import com.travel.common.L3AccessPolicy;
 import com.travel.common.Masks;
 import com.travel.common.ResultCode;
 import com.travel.common.UserContext;
@@ -46,6 +47,7 @@ public class AuthService {
     private final Environment environment;
     private final MailService mailService;
     private final LoginAttemptGuard loginGuard;
+    private final L3AccessPolicy l3AccessPolicy;
 
     /** 发送验证码：邮箱走 SMTP；未配置邮箱时仅 dev 回显（生产不回显）。 */
     public VerifyCodeResponse sendVerifyCode(VerifyCodeRequest req) {
@@ -143,7 +145,8 @@ public class AuthService {
             throw new BizException(ResultCode.NOT_FOUND, "用户不存在");
         }
         return new CurrentUserResponse(user.getId(), user.getNickname(), user.getUserLevel(),
-                user.getProfileCompleted(), user.getDailyGenerateQuota(), user.getDailyGenerateUsed());
+                user.getProfileCompleted(), user.getDailyGenerateQuota(), user.getDailyGenerateUsed(),
+                l3AccessPolicy.hasAccess(user.getId()));
     }
 
     private String codeKey(String scene, String account) {

@@ -86,7 +86,8 @@ describe('LoginView', () => {
       userLevel: 'L1',
       profileCompleted: false,
       dailyGenerateQuota: 3,
-      dailyGenerateUsed: 0
+      dailyGenerateUsed: 0,
+      expertEligible: false
     })
     const { wrapper, router } = await mountView()
     await fill(wrapper, 'a@b.com', 'password1')

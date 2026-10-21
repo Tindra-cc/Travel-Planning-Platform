@@ -17,8 +17,12 @@ import lombok.EqualsAndHashCode;
 public class GuidePost extends BaseEntity {
 
     public static final String STATUS_PUBLISHED = "published";
+    public static final String STATUS_PENDING_REVIEW = "pending_review";
+    public static final String STATUS_REJECTED = "rejected";
+    public static final String STATUS_OFFLINE = "offline";
     public static final String REVIEW_APPROVED = "approved";
     public static final String REVIEW_REJECTED = "rejected";
+    public static final String REVIEW_PENDING = "pending";
 
     private String title;
     private String destination;
@@ -51,4 +55,7 @@ public class GuidePost extends BaseEntity {
      */
     @TableField(typeHandler = JacksonTypeHandler.class)
     private List<GuidePlanSection> planSections;
+
+    /** FR-13：来源发布记录；历史演示数据为 null */
+    private Long publicationId;
 }

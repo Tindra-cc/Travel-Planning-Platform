@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ChatDotRound, Compass, MapLocation, User } from '@element-plus/icons-vue'
+import { ChatDotRound, Compass, MapLocation, Suitcase, User } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -78,6 +78,10 @@ onMounted(async () => {
           <el-menu-item index="/guidebook">
             <el-icon><MapLocation /></el-icon>
             <span>攻略</span>
+          </el-menu-item>
+          <el-menu-item v-if="auth.userInfo?.expertEligible" index="/expert">
+            <el-icon><Suitcase /></el-icon>
+            <span>达人</span>
           </el-menu-item>
         </el-menu>
 

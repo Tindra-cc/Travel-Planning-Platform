@@ -62,6 +62,12 @@ const router = createRouter({
       component: () => import('@/views/TripCompanionView.vue')
     },
     {
+      // 守卫只校验登录；达人门禁由 ExpertInterceptor 负责，前端不复制白名单逻辑
+      path: '/expert',
+      name: 'expert',
+      component: () => import('@/views/ExpertView.vue')
+    },
+    {
       // 兜底：任何未匹配路径都不能让 router-view 空渲染（否则白屏）
       path: '/:pathMatch(.*)*',
       redirect: '/discover'

@@ -55,7 +55,7 @@ Spring Boot 3 + Vue 3 单仓项目。文档：
    mvn spring-boot:run
    ```
 
-   启动日志应显示 Flyway 应用 `V1`~`V19` 迁移。
+   启动日志应显示 Flyway 应用 `V1`~`V23` 迁移。
 
 3. 起前端（端口 5173，已代理 `/api` → `localhost:8080`，含 WebSocket）：
 
@@ -121,6 +121,8 @@ prod 配置（[application-prod.yml](backend/src/main/resources/application-prod
 - `V19__trip_suggestion.sql` — `t_trip_suggestion`（FR-10 调整建议与去重键唯一索引）
 - `V20__guidebook_review.sql` — `t_guidebook_review`（FR-11 复盘评价与统计快照，同一攻略 + 用户唯一）
 - `V21__guidebook_share.sql` — `t_guidebook_share`（FR-12 分享快照与短码）+ `t_guidebook.source_share_id`
+- `V22__expert_workspace.sql` — `t_expert_client` / `t_client_authorization` / `t_client_access_log`，`t_guidebook.expert_client_id`（FR-13 达人客户与授权）
+- `V23__guide_publication.sql` — `t_guide_publication` / `t_expert_earning`，`t_guide_post.publication_id`（FR-13 发布与收益占位）
 
 JSONB 写入依赖 JDBC 连接串上的 `?stringtype=unspecified`，请勿移除。
 
@@ -256,6 +258,19 @@ JSONB 写入依赖 JDBC 连接串上的 `?stringtype=unspecified`，请勿移除
 - 公开页 `/share/:shareCode` 带 `meta.public`，未登录可访问，只调用 `GET /api/share/{shareCode}` 并只读渲染逐日节点、预算与贴士，不渲染编辑、版本、收藏等入口；加载错误区分 `40400`（分享不存在）与 `40900`（已撤回/已过期）。
 - 「为我再生成」在点击时判断登录：未登录跳转 `/login?redirect=<encodeURIComponent(fullPath)>`，登录后回到同一分享；已登录只列出 `ready_to_generate` 会话，提交成功后展示 `dataFreshnessDiff`（`new` 显示为「待刷新」）并可跳转新攻略生成页。失败保留已选会话以便重试。
 
+## 达人工作台（FR-13）
+
+- 达人门禁：`/api/expert/**` 统一由 `ExpertInterceptor` 校验，规则为 `userLevel = L3` 或命中 `ADMIN_USER_IDS` 白名单（`L3AccessPolicy`）；非达人返回 `40300`，他人资源 `40301`。`GET /api/auth/me` 返回服务端计算的 `expertEligible`，前端只据此显隐入口，不重复实现判定。
+- 客户档案：`GET/POST /api/expert/clients`、`GET /api/expert/clients/{clientId}`、`DELETE /api/expert/clients/{clientId}`（归档，只改状态）；姓名必填（≤80），`linkedUserId` 必须指向真实用户否则 `42200`。
+- 授权：`POST /api/expert/clients/{clientId}/authorize` 生成 32 字节 Base64URL 一次性令牌，仅明文返回一次，库中只存 SHA-256，7 天过期；`pending → active → revoked` 单向流转，同一客户同时只允许一条 `pending/active`。客户凭 `POST /api/client-authorizations/{token}/confirm` 接受，达人可用 `revoke` 或 `DELETE /api/expert/clients/{clientId}/authorization` 撤回；令牌转交在线下完成。
+- 审计：每次建/改/查授权与客户数据都写 `t_client_access_log`，`GET /api/expert/clients/{clientId}/access-logs` 可查。
+- 批量生成：`POST /api/expert/clients/{clientId}/guidebooks/generate` 一次 1–5 条意图，**先整体校验**（任一不合法整批拒绝），**按本预扣 N 次**每日配额（与创建同事务，不足则整批失败），成功后逐条入队并写审计；单条失败不影响其余。Redis 锁 `travel:expert:batch:lock:{expertId}` 防重复提交，返回 `42900`。
+- 发布：`POST /api/expert/guidebooks/{guidebookId}/publish` 仅接受 `draft / confirmed / executing / completed`，创建**冻结快照**的 `t_guide_post` 并进入 `pending_review`（推荐流与详情不可见）；同版本重复发布幂等返回原记录，版本变化返回 `40900`。`GET /api/expert/publications` 查询，`POST /api/expert/publications/{publicationId}/offline` 下架。
+- 审核：`POST /api/admin/publications/{publicationId}/review` 由 `AdminGuard` 控制，条件更新避免并发重复审核（失配 `40900`）；通过后写入知识库（`source_type=guide`），驳回则标记拒绝。本期仅提供接口，无运营后台页面。
+- 收益：`GET /api/expert/earnings` **只读占位**，不写任何收益数据，空列表即正确结果，响应固定 `settlementAvailable=false`；前端以「收益为占位展示」明示。
+- 配置：`app.expert.commission-rate`（默认 `0.2`，服务端写入发布记录，请求体不接受）、`ADMIN_USER_IDS`（与 `AdminGuard` 共用白名单）。
+- 前端：`/expert` 工作台（客户 / 发布 / 收益三个页签，非达人显示引导页），顶部导航仅在 `expertEligible` 为真时出现「达人」入口。
+
 ## 与 PRD 的偏差
 
 | 项 | 偏差 | 原因 / 后续 |
@@ -264,11 +279,16 @@ JSONB 写入依赖 JDBC 连接串上的 `?stringtype=unspecified`，请勿移除
 | FR-7 检索 | 仅关键词（`pg_trgm`），未接 Milvus / embedding | 接口已抽象为 `KnowledgeRetriever`，新增向量实现即可切换；`README` 与接口文档同步说明 |
 | FR-8 资源 | 使用本地资源目录与**演示种子数据** | 无真实供应商接口；转链、签名、可用性、时效均为真实实现，替换数据来源即可 |
 | FR-9 地图 | 静态地图为尽力而为，失败降级为坐标 + 链接 | 免费静态图服务可能限流或下线；地图缺失不影响攻略包其余内容 |
-| FR-12 分享渠道 | `market` 渠道未开放，返回 `42200` | 达人发布流程（FR-13/L3）尚未落地；链接与二维码分享已完整实现 |
+| FR-12 分享渠道 | `market` 渠道仍未开放，返回 `42200` | 达人发布（FR-13）已交付，但「分享到市场」与发布审核是两条链路，本期未打通；链接与二维码分享已完整实现 |
+| FR-13 达人身份 | 无独立运营角色表，以 `userLevel = L3` 或 `ADMIN_USER_IDS` 白名单代替 | 角色体系未落地；判定集中在 `L3AccessPolicy`，接入角色表时只改这一处 |
+| FR-13 收益 | 仅只读占位接口，不产生也不结算任何收益 | 结算涉及资金链路与合规，本期只提供页面与数据结构，`settlementAvailable=false` 明示 |
+| FR-13 审核后台 | 仅提供 `POST /api/admin/publications/{id}/review` 接口，无运营页面 | 与 FR-7 运营接口一致，本期以 Swagger 验收；页面留待运营后台整体建设 |
+| FR-13 授权转交 | 一次性令牌由达人线下转交客户，平台不发送通知 | 无短信/站内信通道；令牌只返回一次、7 天过期、库内只存哈希 |
+| FR-13 发布快照 | 发布时冻结快照，之后编辑原攻略不会更新已发布内容 | 保证推荐端内容可审可控；如需更新走新版本重新发布 |
 
 ## 当前进度
 
-已完成：鉴权（§2）、用户画像 FR-1（§3）、对话会话 FR-2（§4，含 WS 流式）、推荐攻略流（§5.7，推荐页 + `GET /api/guides/recommend`）、推荐攻略详情（§5.8，详情页 `/discover/:postId`：多图 + 住宿/吃饭/景点/交通四模块 + 原文外链）、攻略生成 FR-3、攻略编辑 FR-5（阶段 A–I）、实时数据 FR-6、预订转链 FR-8、知识库溯源 FR-7、离线攻略包 FR-9、多方案对比与混搭 FR-4、行程伴侣 FR-10（阶段 A–C）、复盘闭环 FR-11（阶段 A–C）、攻略分享 FR-12（阶段 A–C）。
+已完成：鉴权（§2）、用户画像 FR-1（§3）、对话会话 FR-2（§4，含 WS 流式）、推荐攻略流（§5.7，推荐页 + `GET /api/guides/recommend`）、推荐攻略详情（§5.8，详情页 `/discover/:postId`：多图 + 住宿/吃饭/景点/交通四模块 + 原文外链）、攻略生成 FR-3、攻略编辑 FR-5（阶段 A–I）、实时数据 FR-6、预订转链 FR-8、知识库溯源 FR-7、离线攻略包 FR-9、多方案对比与混搭 FR-4、行程伴侣 FR-10（阶段 A–C）、复盘闭环 FR-11（阶段 A–C）、攻略分享 FR-12（阶段 A–C）、达人工作台 FR-13（阶段 A–D）。
 
 推荐页 `/discover` 是登录后的落地页，内容为上述 `V4` 演示种子数据（封面图走 picsum.photos 外链，图片内容与目的地无关）；详情页内容由 `V7` 补充。画像页基础画像含「人均预算」与「行程天数」两个具体数值（`V6`，不影响完整性校验）。
 
@@ -307,6 +327,7 @@ FR-6/8/7/9/4 已交付：实时数据以“快照 + 逐源降级”接入，营�
 | FR-10 行程伴侣 | `TripCompanionServiceTest`、`SuggestionRuleEngineTest`、`TripCompanionScanServiceTest`、`TripCompanionSchedulerTest`、`CompanionNodeEditorTest`、`SuggestionDecisionServiceTest`、`TripCompanionControllerTest` | `TripCompanionView.spec.ts` |
 | FR-11 复盘闭环 | `ReviewStatsServiceTest`、`ReviewServiceTest`、`ReviewControllerTest`、`ReviewSummaryGeneratorTest`、`ProfileSuggestionServiceTest`、`ProfileIterationServiceTest` | `ReviewPanel.spec.ts`、`GuidebookView.spec.ts`（完成态门控） |
 | FR-12 攻略分享 | `ShareSnapshotBuilderTest`、`ShareServiceTest`、`ShareControllerTest`、`ShareCodeTest`、`ShareReferenceBuilderTest`、`ShareFreshnessServiceTest`、`ShareRegenerationServiceTest`、`PromptAssemblyStepTest` | `ShareDialog.spec.ts`、`ShareView.spec.ts`、`GuidebookView.spec.ts`（分享入口门控） |
+| FR-13 达人工作台 | `L3AccessPolicyTest`、`ExpertClientServiceTest`、`ClientAuthorizationServiceTest`、`ClientAccessAuditServiceTest`、`ExpertBatchGenerationServiceTest`、`GuidebookServiceQuotaTest`、`GuidePublicationServiceTest`、`AdminPublicationServiceTest`、`GuideKnowledgeIngestionServiceTest`、`ExpertEarningServiceTest`、`ExpertInterceptorTest`、`ExpertControllerTest`、`ExpertGenerationControllerTest`、`PublicationControllerTest`、`ExpertEarningControllerTest`、`AuthServiceTest`（`expertEligible`） | `ExpertView.spec.ts`、`App.spec.ts`（达人导航门控）、`expertApi.spec.ts` |
 
 ## 常用命令
 

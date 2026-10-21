@@ -211,9 +211,12 @@ POST /api/guidebooks/generate
   "userLevel": "L1",
   "profileCompleted": true,
   "dailyGenerateQuota": 3,
-  "dailyGenerateUsed": 1
+  "dailyGenerateUsed": 1,
+  "expertEligible": false
 }
 ```
+
+`expertEligible` 由服务端 `L3AccessPolicy`（L3 或 `app.admin.user-ids` 白名单）计算，仅用于前端显示达人入口；接口门禁仍由 `ExpertInterceptor` 独立校验。
 
 ---
 
@@ -1356,87 +1359,188 @@ POST /api/guidebooks/generate
 
 ## 13. 达人工作台（FR-13，L3）
 
+> 权限：`/api/expert/**` 统一由 `ExpertInterceptor` 校验，规则与运营一致——用户等级 `L3` 或命中 `app.admin.user-ids` 白名单；不满足返回 40300。客户归属不符返回 40301。
+>
+> 客户授权状态机：`pending`（已发起，待客户确认）→ `active`（客户已确认）→ `revoked`。每次访问客户数据都会重新校验授权，不依赖前端缓存。
+
 ### 13.1 客户列表
 
-**GET** `/api/expert/clients?page=1&pageSize=20`
+**GET** `/api/expert/clients?page=1&pageSize=20&status=active`
 
-### 13.2 创建客户档案
+`status` 可选 `active` / `archived`。列表项：
+
+```json
+{
+  "clientId": "11",
+  "name": "客户A",
+  "contact": "13800000000",
+  "note": "",
+  "linkedUserId": "10002",
+  "status": "active",
+  "createdAt": "2026-10-01 10:00:00",
+  "authorizationStatus": "active",
+  "authorizedScopes": ["profile", "guidebooks"],
+  "authorizedAt": "2026-10-02 09:00:00"
+}
+```
+
+`authorizationStatus` 为 `active` / `pending` / `none`，是派生字段，不单独落表。
+
+### 13.2 创建客户档案与详情
 
 **POST** `/api/expert/clients`
-
-请求：
 
 ```json
 {
   "name": "客户A",
   "contact": "13800000000",
-  "note": ""
+  "note": "",
+  "linkedUserId": "10002"
 }
 ```
+
+`name` 必填（≤80）；`linkedUserId` 可空，非空时必须是已存在用户（否则 42200）。创建后不可通过该接口修改绑定账号。
+
+**GET** `/api/expert/clients/{clientId}`：返回与列表项相同的结构，并记录一次 `view_client` 访问审计。
+
+**DELETE** `/api/expert/clients/{clientId}`：归档客户，只改状态，不删除历史发布与审计。
 
 ### 13.3 客户授权画像访问
 
 **POST** `/api/expert/clients/{clientId}/authorize`
 
-请求：
-
 ```json
 { "scope": ["profile", "guidebooks"] }
 ```
 
-> 客户需确认授权，返回授权凭证，访问留痕可审计。
+响应 `data`：
+
+```json
+{
+  "authorizationId": "9",
+  "confirmToken": "一次性明文令牌",
+  "expiresAt": "2026-10-09 10:00:00",
+  "scope": ["profile", "guidebooks"]
+}
+```
+
+- `confirmToken` 只在本次响应出现一次；服务端只保存 SHA-256 哈希，有效期 7 天。
+- 同一客户同时最多一条 `active` 或 `pending` 授权；重新发起会把上一条 `pending` 置为撤回。
+- `scope` 必须是 `profile` / `guidebooks` 的子集；批量生成同时要求两个 scope。
+
+客户侧确认与撤回（不要求达人权限）：
+
+**POST** `/api/client-authorizations/{token}/confirm`
+
+响应 `data`：`{ authorizationId, clientId, status, scope, grantedAt }`。
+
+**POST** `/api/client-authorizations/{authorizationId}/revoke`
+
+达人侧撤回当前授权：**DELETE** `/api/expert/clients/{clientId}/authorization`（幂等）。
+
+访问审计：
+
+**GET** `/api/expert/clients/{clientId}/access-logs?page=1&pageSize=20`
+
+列表项：`{ logId, action, scope, resourceType, resourceId, ip, createdAt }`。`action` 取值 `view_client` / `read_profile` / `generate_guidebook` / `list_guidebooks`。
 
 ### 13.4 为客户批量生成攻略
 
 **POST** `/api/expert/clients/{clientId}/guidebooks/generate`
 
-请求：
-
 ```json
 {
   "intents": [
-    { "destination": "日本", "dateWindow": {}, "party": {}, "budget": {} }
+    {
+      "destination": "日本",
+      "dateWindow": { "start": "2026-11-01", "end": "2026-11-07" },
+      "party": { "adults": 2 },
+      "budget": { "amount": 12000, "currency": "CNY" }
+    }
   ]
 }
 ```
+
+- `intents` 数量 1–5；所有意图先全部校验，任一不完整返回 42200，不创建任何攻略。
+- 配额按本扣减（N 条意图 = N 次配额），在创建攻略的同一事务内一次性预扣；不足 N 次则整批失败返回 42900，不创建任何攻略。
+- 同一达人同时只允许一个批量提交（Redis 锁 `travel:expert:batch:lock:{expertId}`，300 秒），重复返回 42900。
+- 每本攻略独立入池；单本提交失败只把该行置为 `failed`，不影响其余。
 
 响应 `data`：
 
 ```json
 {
   "tasks": [
-    { "taskId": "bt10001", "status": "generating" }
+    { "taskId": "1201", "status": "generating" },
+    { "taskId": "1202", "status": "failed" }
   ]
 }
 ```
+
+`taskId` 即生成的攻略 ID；进度查询与 WebSocket 复用 `GET /api/guidebooks/{guidebookId}`。
 
 ### 13.5 发布攻略到市场
 
 **POST** `/api/expert/guidebooks/{guidebookId}/publish`
 
-请求：
-
 ```json
 {
-  "price": 9900,
   "title": "东京大阪 7 天温泉樱花行",
-  "description": "..."
+  "description": "...",
+  "coverUrl": "https://example.com/cover.jpg",
+  "priceCents": 9900,
+  "tags": ["温泉", "樱花"]
 }
 ```
+
+- 仅攻略所有者；攻略状态允许 `draft` / `confirmed` / `executing` / `completed`，否则 40900。
+- 发布时把攻略内容冻结为 `t_guide_post` 快照；待审期间推荐流与详情不可见。
+- 同一攻略同时最多一条 `pending_review` / `published` 记录；同版本重复发布幂等，返回已有记录；不同版本需先下线，否则 40900。
 
 响应 `data`：
 
 ```json
+{ "publishedId": "50", "status": "pending_review", "commissionRate": 0.2 }
+```
+
+**GET** `/api/expert/publications?status=pending_review&page=1&pageSize=20`
+
+列表项：
+
+```json
 {
-  "publishedId": "pg11001",
+  "publicationId": "50",
+  "guidebookId": "31",
+  "title": "成都四日",
   "status": "pending_review",
-  "commissionRate": 0.2
+  "priceCents": 19900,
+  "commissionRate": 0.2,
+  "rejectReason": null,
+  "createdAt": "2026-10-01 10:00:00"
 }
 ```
+
+状态：`pending_review` / `published` / `rejected` / `offline`。
+
+**POST** `/api/expert/publications/{publicationId}/offline`：仅本人；把发布与对应帖子置为 `offline`。`rejected` / `offline` 调用幂等。
 
 ### 13.6 达人收益列表
 
 **GET** `/api/expert/earnings?page=1&pageSize=20`
+
+```json
+{
+  "list": [],
+  "page": 1,
+  "pageSize": 20,
+  "total": 0,
+  "settlementAvailable": false
+}
+```
+
+- 只返回当前达人（登录态）的数据，不接受 `expertId` 参数。
+- 本期无订单、支付与结算链路，`t_expert_earning` 无写入路径，空列表是正确结果；`settlementAvailable` 恒为 `false`，前端据此展示占位声明。
+- `pageSize` 最大 50；发布记录缺失时 `guideTitle` 回退为「已下架的发布记录」。
 
 ---
 
@@ -1481,6 +1585,21 @@ POST /api/guidebooks/generate
 ```
 
 响应 `data`：`{ postId, reviewStatus, knowledgeDocId }`。通过时写入/更新 `t_knowledge_doc`（`sourceType=guide`、`sourceRefId=postId` 幂等）并使其可被检索；驳回只更新状态，已入库条目转为 `rejected` 并退出检索池。
+
+**FR-13 扩展：审核发布记录**
+
+**POST** `/api/admin/publications/{publicationId}/review`
+
+```json
+{ "approved": true, "reason": "" }
+```
+
+响应 `data`：`{ publicationId, status, postId }`。
+
+- 只处理 `pending_review` 的发布；条件更新保证并发审核只有一个成功，其余返回 40900。
+- 通过：发布置 `published`，帖子置 `published` / `approved`，并按 7C 的同一路径写入知识库。
+- 驳回：发布与帖子置 `rejected`，原因写入 `reject_reason`；已入库的知识条目转为 `rejected`。
+- 发布记录缺失 40400；发布内容缺失（无 `postId`）40900。
 
 ### 14.4 数据源配置
 

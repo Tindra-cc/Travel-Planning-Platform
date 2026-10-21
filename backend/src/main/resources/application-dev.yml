@@ -83,8 +83,11 @@ app:
   cors:
     allowed-origins: http://localhost:5173,http://127.0.0.1:5173
   admin:
-    # 运营接口白名单；未配置时仅 L3 用户可访问
+    # 运营接口白名单；未配置时仅 L3 用户可访问（FR-6/7/13）
     user-ids: ${ADMIN_USER_IDS:}
+  expert:
+    # 达人分成比例，由服务端写入发布记录，请求体不接受该字段
+    commission-rate: ${EXPERT_COMMISSION_RATE:0.2}
   link:
     # 开发环境固定密钥，便于重启后转链仍可用；生产必须注入环境变量
     signing-secret: ${LINK_SIGNING_SECRET:dev-only-link-secret}

@@ -4,14 +4,20 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+import com.travel.modules.expert.config.ExpertInterceptor;
+
 import cn.dev33.satoken.interceptor.SaInterceptor;
 import cn.dev33.satoken.stp.StpUtil;
+import lombok.RequiredArgsConstructor;
 
 /**
  * Sa-Token 鉴权拦截器装配。公开路径放行，其余统一校验登录。
  */
 @Configuration
+@RequiredArgsConstructor
 public class SaTokenConfig implements WebMvcConfigurer {
+
+    private final ExpertInterceptor expertInterceptor;
 
     /** 无需登录即可访问的路径 */
     private static final String[] EXCLUDE_PATHS = {
@@ -35,5 +41,7 @@ public class SaTokenConfig implements WebMvcConfigurer {
         registry.addInterceptor(new UserContextInterceptor())
                 .addPathPatterns("/**")
                 .excludePathPatterns(EXCLUDE_PATHS);
+        registry.addInterceptor(expertInterceptor)
+                .addPathPatterns("/api/expert/**");
     }
 }

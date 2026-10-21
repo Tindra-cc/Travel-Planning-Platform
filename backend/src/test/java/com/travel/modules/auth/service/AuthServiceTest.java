@@ -60,6 +60,8 @@ class AuthServiceTest {
     private MailService mailService;
     @Mock
     private LoginAttemptGuard loginGuard;
+    @Mock
+    private com.travel.common.L3AccessPolicy l3AccessPolicy;
 
     private AuthService service;
 
@@ -67,7 +69,7 @@ class AuthServiceTest {
     void setUp() {
         lenient().when(redis.opsForValue()).thenReturn(values);
         service = new AuthService(userMapper, passwordEncoder, redis, environment,
-                mailService, loginGuard);
+                mailService, loginGuard, l3AccessPolicy);
     }
 
     @AfterEach
@@ -220,6 +222,16 @@ class AuthServiceTest {
         assertThat(me.getUserId()).isEqualTo(1L);
         assertThat(me.getUserLevel()).isEqualTo("L1");
         assertThat(me.getDailyGenerateQuota()).isEqualTo(3);
+        assertThat(me.getExpertEligible()).isFalse();
+    }
+
+    @Test
+    void meExposesExpertEligibilityFromPolicy() {
+        UserContext.set(new LoginUser(1L, ACCOUNT));
+        when(userMapper.selectById(1L)).thenReturn(user(1));
+        when(l3AccessPolicy.hasAccess(1L)).thenReturn(true);
+
+        assertThat(service.me().getExpertEligible()).isTrue();
     }
 
     private User user(int status) {

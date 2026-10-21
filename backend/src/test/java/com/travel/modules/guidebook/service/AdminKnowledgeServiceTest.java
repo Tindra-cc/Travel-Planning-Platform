@@ -33,6 +33,8 @@ class AdminKnowledgeServiceTest {
     private KnowledgeDocMapper knowledgeDocMapper;
     @Mock
     private GuidePostMapper guidePostMapper;
+    @Mock
+    private GuideKnowledgeIngestionService ingestionService;
 
     @InjectMocks
     private AdminKnowledgeService service;
@@ -67,56 +69,33 @@ class AdminKnowledgeServiceTest {
     }
 
     @Test
-    void approvedReviewWritesKnowledgeDoc() {
+    void approvedReviewDelegatesIngestionToSharedService() {
         GuidePost post = post();
         when(guidePostMapper.selectById(11L)).thenReturn(post);
-        when(knowledgeDocMapper.selectOne(any())).thenReturn(null);
-        ArgumentCaptor<KnowledgeDoc> captor = ArgumentCaptor.forClass(KnowledgeDoc.class);
+        when(ingestionService.ingest(post, 7L)).thenReturn(5L);
 
         KnowledgeReviewResponse response = service.review(11L, true, 7L);
 
         assertThat(response.getReviewStatus()).isEqualTo(GuidePost.REVIEW_APPROVED);
+        assertThat(response.getKnowledgeDocId()).isEqualTo(5L);
+        assertThat(post.getReviewStatus()).isEqualTo(GuidePost.REVIEW_APPROVED);
         verify(guidePostMapper).updateById(post);
-        verify(knowledgeDocMapper).insert(captor.capture());
-        KnowledgeDoc doc = captor.getValue();
-        assertThat(doc.getSourceType()).isEqualTo(KnowledgeDoc.SOURCE_TYPE_GUIDE);
-        assertThat(doc.getSourceRefId()).isEqualTo(11L);
-        assertThat(doc.getStatus()).isEqualTo(KnowledgeDoc.STATUS_APPROVED);
-        assertThat(doc.getTitle()).isEqualTo(post.getTitle());
+        verify(ingestionService).ingest(post, 7L);
     }
 
     @Test
-    void approvedReviewRefreshesExistingEntryInsteadOfDuplicating() {
+    void rejectedReviewDelegatesRejectionToSharedService() {
         GuidePost post = post();
-        KnowledgeDoc existing = new KnowledgeDoc();
-        existing.setId(3L);
-        existing.setStatus(KnowledgeDoc.STATUS_REJECTED);
         when(guidePostMapper.selectById(11L)).thenReturn(post);
-        when(knowledgeDocMapper.selectOne(any())).thenReturn(existing);
-
-        KnowledgeReviewResponse response = service.review(11L, true, 7L);
-
-        assertThat(response.getKnowledgeDocId()).isEqualTo(3L);
-        assertThat(existing.getStatus()).isEqualTo(KnowledgeDoc.STATUS_APPROVED);
-        verify(knowledgeDocMapper).updateById(existing);
-        verify(knowledgeDocMapper, never()).insert(any(KnowledgeDoc.class));
-    }
-
-    @Test
-    void rejectedReviewRemovesEntryFromRetrieval() {
-        GuidePost post = post();
-        KnowledgeDoc existing = new KnowledgeDoc();
-        existing.setId(3L);
-        existing.setStatus(KnowledgeDoc.STATUS_APPROVED);
-        when(guidePostMapper.selectById(11L)).thenReturn(post);
-        when(knowledgeDocMapper.selectOne(any())).thenReturn(existing);
+        when(ingestionService.reject(11L, 7L)).thenReturn(3L);
 
         KnowledgeReviewResponse response = service.review(11L, false, 7L);
 
         assertThat(response.getReviewStatus()).isEqualTo(GuidePost.REVIEW_REJECTED);
+        assertThat(response.getKnowledgeDocId()).isEqualTo(3L);
         assertThat(post.getReviewStatus()).isEqualTo(GuidePost.REVIEW_REJECTED);
-        assertThat(existing.getStatus()).isEqualTo(KnowledgeDoc.STATUS_REJECTED);
-        verify(knowledgeDocMapper).updateById(existing);
+        verify(guidePostMapper).updateById(post);
+        verify(ingestionService).reject(11L, 7L);
     }
 
     @Test

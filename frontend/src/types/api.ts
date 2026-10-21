@@ -53,6 +53,8 @@ export interface CurrentUser {
   profileCompleted: boolean
   dailyGenerateQuota: number
   dailyGenerateUsed: number
+  /** 是否可使用达人工作台（由服务端 L3 / 白名单计算） */
+  expertEligible: boolean
 }
 
 // ---- §3 用户画像 ----
@@ -630,4 +632,95 @@ export interface RegenerateResponse {
   guidebookId: string
   status: string
   dataFreshnessDiff: FreshnessDiffItem[]
+}
+
+// ---- §13 FR-13 达人工作台 ----
+
+export interface ExpertClientItem {
+  clientId: string
+  name: string
+  contact: string | null
+  note: string | null
+  linkedUserId: string | null
+  status: string
+  createdAt: string
+  /** active / pending / none：由服务端派生的授权状态 */
+  authorizationStatus: string | null
+  authorizedScopes: string[] | null
+  authorizedAt: string | null
+}
+
+export interface ExpertClientCreateBody {
+  name: string
+  contact?: string | null
+  note?: string | null
+  linkedUserId?: string | null
+}
+
+export interface AuthorizeIssued {
+  authorizationId: string
+  /** 明文令牌，只在创建响应中出现一次 */
+  confirmToken: string
+  expiresAt: string
+  scope: string[]
+}
+
+export interface ExpertClientAccessLog {
+  logId: string
+  action: string
+  scope: string | null
+  resourceType: string | null
+  resourceId: string | null
+  ip: string | null
+  createdAt: string
+}
+
+export interface BatchIntent {
+  destination: string
+  dateWindow: { start: string; end: string }
+  party: { adults: number }
+  budget: { amount: number; currency: string }
+}
+
+export interface BatchTask {
+  taskId: string
+  /** generating / failed */
+  status: string
+}
+
+export interface ExpertPublicationItem {
+  publicationId: string
+  guidebookId: string
+  title: string
+  status: string
+  priceCents: number
+  commissionRate: number
+  rejectReason: string | null
+  createdAt: string
+}
+
+export interface PublishBody {
+  title: string
+  description?: string | null
+  coverUrl?: string | null
+  priceCents?: number
+  tags?: string[]
+}
+
+export interface EarningItem {
+  earningId: string
+  publicationId: string
+  guideTitle: string
+  amountCents: number
+  /** pending / settled */
+  status: string
+  createdAt: string
+}
+
+export interface EarningsPage {
+  list: EarningItem[]
+  page: number
+  pageSize: number
+  total: number
+  settlementAvailable: boolean
 }

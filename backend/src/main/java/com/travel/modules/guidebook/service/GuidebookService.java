@@ -316,6 +316,11 @@ public class GuidebookService {
 
     /** 每次普通生成扣一次配额；对比生成一次扣一次（由调用方只调用一次）。 */
     public void consumeQuotaOnce(Long userId) {
+        consumeQuota(userId, 1);
+    }
+
+    /** 批量预扣：不足时整体失败，不产生任何扣减。调用方负责事务边界。 */
+    public void consumeQuota(Long userId, int count) {
         User user = userMapper.selectForUpdate(userId);
         if (user == null) {
             throw new BizException(ResultCode.UNAUTHORIZED, "用户不存在或已禁用");
@@ -326,13 +331,35 @@ public class GuidebookService {
             used = 0;
         }
         int quota = user.getDailyGenerateQuota() == null ? 3 : user.getDailyGenerateQuota();
-        if (used >= quota) {
+        if (used + count > quota) {
             throw new BizException(ResultCode.TOO_MANY_REQUEST,
-                    "今日生成次数已用完（每日 " + quota + " 次）");
+                    count == 1
+                            ? "今日生成次数已用完（每日 " + quota + " 次）"
+                            : "今日生成次数不足（需要 " + count + " 次，剩余 " + (quota - used) + " 次）");
         }
-        user.setDailyGenerateUsed(used + 1);
+        user.setDailyGenerateUsed(used + count);
         user.setGenerateQuotaDate(today);
         userMapper.updateById(user);
+    }
+
+    /** FR-13：达人代客户创建生成中攻略，不扣配额（由批量服务统一预扣）。 */
+    public Guidebook createExpertGuidebook(Long expertId, Long clientId, IntentDto intent,
+            Map<String, Object> profileSnapshot) {
+        Guidebook guidebook = new Guidebook();
+        guidebook.setUserId(expertId);
+        guidebook.setSessionId(null);
+        guidebook.setExpertClientId(clientId);
+        guidebook.setStatus(Guidebook.STATUS_GENERATING);
+        guidebook.setVersion(1);
+        guidebook.setIntent(intent);
+        guidebook.setProfileSnapshot(profileSnapshot);
+        guidebook.setDegradedMode(false);
+        guidebook.setCurrentStep("queued");
+        guidebook.setProgress(0);
+        guidebook.setAttemptCount(1);
+        guidebook.setStartedAt(LocalDateTime.now());
+        guidebookMapper.insert(guidebook);
+        return guidebook;
     }
 
     /** FR-4：为对比方案创建一条独立的生成中攻略，不重复扣配额。 */
@@ -414,7 +441,8 @@ public class GuidebookService {
                 .last("LIMIT 1"));
     }
 
-    private void requireCompleteIntent(IntentDto intent) {
+    /** FR-13 批量生成在创建攻略前统一校验，全部通过才开始。 */
+    public void requireCompleteIntent(IntentDto intent) {
         if (intent == null) {
             throw new BizException(ResultCode.UNPROCESSABLE, "缺少旅行意图");
         }

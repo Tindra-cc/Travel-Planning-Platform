@@ -84,4 +84,7 @@ public class Guidebook extends BaseEntity {
 
     /** FR-12：再生成来源分享；普通攻略为 null */
     private Long sourceShareId;
+
+    /** FR-13：达人代客户生成的攻略所属客户；普通攻略为 null */
+    private Long expertClientId;
 }
