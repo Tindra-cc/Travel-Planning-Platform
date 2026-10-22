@@ -182,7 +182,12 @@ describe('ExpertView', () => {
   })
 
   it('批量生成最多 5 条，未补全时不调用接口', async () => {
-    mockedClients.mockResolvedValue({ list: [client()], page: 1, pageSize: 20, total: 1 })
+    mockedClients.mockResolvedValue({
+      list: [client({ authorizationStatus: 'active' })],
+      page: 1,
+      pageSize: 20,
+      total: 1
+    })
 
     const { wrapper } = await mountExpert(true)
     await findButton(wrapper, '批量生成')!.trigger('click')

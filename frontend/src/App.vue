@@ -88,7 +88,13 @@ onMounted(async () => {
 
         <div class="nav-user">
           <template v-if="auth.isLoggedIn">
-            <el-button v-if="auth.userInfo" size="small" text @click="router.push('/me')">
+            <el-button
+              v-if="auth.userInfo"
+              class="nickname"
+              size="small"
+              text
+              @click="router.push('/me')"
+            >
               {{ auth.userInfo.nickname }}
             </el-button>
             <el-button size="small" text @click="onLogout">退出登录</el-button>
@@ -191,5 +197,28 @@ onMounted(async () => {
   max-width: 1200px;
   margin: 0 auto;
   padding: var(--space-6);
+}
+
+@media (max-width: 720px) {
+  .nav-inner {
+    gap: var(--space-2);
+    padding: 0 var(--space-3);
+  }
+  .brand-text {
+    display: none;
+  }
+  .nav-menu :deep(.el-menu-item) {
+    padding: 0 10px;
+    gap: 0;
+  }
+  .nav-menu :deep(.el-menu-item span) {
+    display: none;
+  }
+  .nickname {
+    display: none;
+  }
+  .app-main {
+    padding: var(--space-3);
+  }
 }
 </style>

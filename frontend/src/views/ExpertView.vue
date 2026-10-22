@@ -84,6 +84,12 @@ function scopeLabel(scope: string | null) {
   return scope ? SCOPE_LABELS[scope] || scope : '—'
 }
 
+function authorizeLabel(client: ExpertClientItem) {
+  if (client.authorizationStatus === 'active') return '重新授权'
+  if (client.authorizationStatus === 'pending') return '重发授权'
+  return '发起授权'
+}
+
 function handlePermissionError(error: unknown) {
   if (error instanceof ApiError && error.code === 40300) {
     permissionDenied.value = true
@@ -431,8 +437,24 @@ onMounted(async () => {
             <el-table-column label="操作" width="320" fixed="right">
               <template #default="{ row }">
                 <el-button size="small" @click="openDetail(row)">详情</el-button>
-                <el-button size="small" @click="openAuthorize(row)">发起授权</el-button>
-                <el-button size="small" @click="openBatch(row)">批量生成</el-button>
+                <el-button size="small" @click="openAuthorize(row)">
+                  {{ authorizeLabel(row) }}
+                </el-button>
+                <el-tooltip
+                  :disabled="row.authorizationStatus === 'active'"
+                  content="需客户完成授权后才能生成"
+                  placement="top"
+                >
+                  <span>
+                    <el-button
+                      size="small"
+                      :disabled="row.authorizationStatus !== 'active'"
+                      @click="openBatch(row)"
+                    >
+                      批量生成
+                    </el-button>
+                  </span>
+                </el-tooltip>
               </template>
             </el-table-column>
           </el-table>
@@ -642,6 +664,7 @@ onMounted(async () => {
           <el-select
             v-model="publishForm.guidebookId"
             placeholder="选择要发布的攻略"
+            no-data-text="暂无可发布的攻略"
             @change="onGuidebookChange"
           >
             <el-option
@@ -769,5 +792,28 @@ onMounted(async () => {
   align-items: center;
   gap: var(--space-3);
   padding: 4px 0;
+}
+
+@media (max-width: 720px) {
+  .expert-view :deep(.el-table-fixed-column--right) {
+    position: static !important;
+    right: auto !important;
+    box-shadow: none !important;
+  }
+  :global(.el-dialog) {
+    width: calc(100vw - 32px) !important;
+    max-width: 560px;
+  }
+  :global(.el-drawer) {
+    width: 100% !important;
+  }
+  .intent-row {
+    flex-wrap: wrap;
+  }
+  .intent-destination,
+  .intent-dates {
+    width: 100%;
+    flex: 1 1 100%;
+  }
 }
 </style>
