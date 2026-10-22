@@ -24,6 +24,7 @@ import com.travel.common.ResultCode;
 import com.travel.modules.auth.entity.User;
 import com.travel.modules.auth.mapper.UserMapper;
 import com.travel.modules.chat.mapper.ChatSessionMapper;
+import com.travel.modules.guide.service.GuideReferenceBuilder;
 import com.travel.modules.guidebook.entity.Guidebook;
 import com.travel.modules.guidebook.generation.GuidebookGenerationRunner;
 import com.travel.modules.guidebook.mapper.GuidebookMapper;
@@ -51,10 +52,13 @@ class GuidebookServiceQuotaTest {
     private TransactionTemplate transactionTemplate;
     @Mock
     private ResourceService resourceService;
+    @Mock
+    private GuideReferenceBuilder guideReferenceBuilder;
 
     private GuidebookService service() {
         return new GuidebookService(guidebookMapper, sessionMapper, userMapper, profileMapper,
-                runner, redisTemplate, transactionTemplate, new ObjectMapper(), resourceService);
+                runner, redisTemplate, transactionTemplate, new ObjectMapper(), resourceService,
+                guideReferenceBuilder);
     }
 
     @Test

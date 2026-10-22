@@ -55,6 +55,8 @@ class ChatServiceTest {
     private IntentService intentService;
     @Mock
     private GuidebookService guidebookService;
+    @Mock
+    private com.travel.modules.guide.service.GuideReferenceBuilder guideReferenceBuilder;
 
     private ChatService service;
     private final AtomicLong messageIds = new AtomicLong(100);
@@ -62,7 +64,8 @@ class ChatServiceTest {
     @BeforeEach
     void setUp() {
         UserContext.set(new LoginUser(USER_ID, "user1@test.local"));
-        service = new ChatService(sessionMapper, messageMapper, intentService, guidebookService);
+        service = new ChatService(sessionMapper, messageMapper, intentService, guidebookService,
+                guideReferenceBuilder);
         org.mockito.Mockito.lenient().when(messageMapper.insert(any(ChatMessage.class)))
                 .thenAnswer(invocation -> {
                     ChatMessage message = invocation.getArgument(0);
@@ -85,7 +88,7 @@ class ChatServiceTest {
         });
         when(intentService.analyze(anyList())).thenReturn(result(true));
 
-        SessionResponse response = service.createSession("去成都玩两天");
+        SessionResponse response = service.createSession("去成都玩两天", null);
 
         assertThat(response.getSessionId()).isEqualTo(SESSION_ID);
         assertThat(response.getStatus()).isEqualTo(ChatSession.STATUS_READY);
@@ -105,7 +108,7 @@ class ChatServiceTest {
         });
         when(intentService.analyze(anyList())).thenReturn(result(false));
 
-        SessionResponse response = service.createSession("我想去旅游");
+        SessionResponse response = service.createSession("我想去旅游", null);
 
         assertThat(response.getStatus()).isEqualTo(ChatSession.STATUS_COLLECTING);
         assertThat(response.getPendingQuestions()).extracting(PendingQuestion::getQuestionId)
@@ -121,7 +124,7 @@ class ChatServiceTest {
         });
         when(intentService.analyze(anyList())).thenReturn(result(true));
 
-        service.createSession("一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十");
+        service.createSession("一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十", null);
 
         ArgumentCaptor<ChatSession> captor = ArgumentCaptor.forClass(ChatSession.class);
         verify(sessionMapper).insert(captor.capture());

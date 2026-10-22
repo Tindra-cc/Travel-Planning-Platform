@@ -1,6 +1,7 @@
 package com.travel.modules.chat.controller;
 
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -68,7 +69,7 @@ class ChatControllerTest {
         response.setStatus("collecting");
         response.setMessages(List.of());
         response.setPendingQuestions(List.of());
-        when(chatService.createSession(anyString())).thenReturn(response);
+        when(chatService.createSession(anyString(), isNull())).thenReturn(response);
 
         mvc.perform(post("/api/chat/sessions").contentType(MediaType.APPLICATION_JSON)
                         .content(MvcTestSupport.json(Map.of("firstMessage", "去成都"))))

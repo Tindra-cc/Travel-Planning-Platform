@@ -46,6 +46,7 @@ import com.travel.modules.guidebook.dto.GuidebookListItem;
 import com.travel.modules.guidebook.entity.Guidebook;
 import com.travel.modules.guidebook.generation.GenerationContext;
 import com.travel.modules.guidebook.generation.GuidebookGenerationRunner;
+import com.travel.modules.guide.service.GuideReferenceBuilder;
 import com.travel.modules.guidebook.mapper.GuidebookMapper;
 import com.travel.modules.profile.mapper.UserProfileMapper;
 import com.travel.support.TestFixtures;
@@ -75,6 +76,8 @@ class GuidebookServiceTest {
     private TransactionTemplate transactionTemplate;
     @Mock
     private ResourceService resourceService;
+    @Mock
+    private GuideReferenceBuilder guideReferenceBuilder;
 
     private GuidebookService service;
 
@@ -83,7 +86,7 @@ class GuidebookServiceTest {
         UserContext.set(new LoginUser(USER_ID, "user1@test.local"));
         service = new GuidebookService(guidebookMapper, sessionMapper, userMapper,
                 profileMapper, runner, redis, transactionTemplate, new ObjectMapper(),
-                resourceService);
+                resourceService, guideReferenceBuilder);
         lenientSetUp();
     }
 

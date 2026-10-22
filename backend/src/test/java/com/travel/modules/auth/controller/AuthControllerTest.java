@@ -131,7 +131,8 @@ class AuthControllerTest {
     @Test
     void meReturnsQuota() throws Exception {
         when(authService.me())
-                .thenReturn(new CurrentUserResponse(1L, "旅行者", "L1", false, 3, 1, false));
+                .thenReturn(new CurrentUserResponse(1L, "a@b.com", "email", "旅行者", "L1",
+                        false, 3, 1, false));
 
         mvc.perform(get("/api/auth/me"))
                 .andExpect(status().isOk())
