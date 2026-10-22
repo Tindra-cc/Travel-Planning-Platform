@@ -222,7 +222,9 @@ describe('GuidebookView', () => {
     expect(wrapper.text()).toContain('[K1] 宽窄巷子')
     expect(wrapper.find('a.citation').attributes('href')).toBe('https://example.com/k1')
     expect(wrapper.text()).toContain('预算拆解')
-    expect(wrapper.text()).toContain('天气数据不可用')
+    // 数据源缺失已由演示数据兜底，不再向用户展示降级提示
+    expect(wrapper.text()).not.toContain('天气数据不可用')
+    expect(wrapper.text()).not.toContain('模板生成')
     expect(intervalSpy.mock.calls.some((call) => call[1] === 2000)).toBe(false)
     wrapper.unmount()
   })

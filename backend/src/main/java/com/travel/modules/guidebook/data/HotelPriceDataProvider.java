@@ -49,7 +49,9 @@ public class HotelPriceDataProvider implements TravelDataProvider {
         if (serp.isPresent()) {
             return serp;
         }
-        return client.fetch(source(), "酒店", properties.getHotelPriceUrl(), intent);
+        Optional<DataBlock> configured = client.fetch(source(), "酒店",
+                properties.getHotelPriceUrl(), intent);
+        return configured.isPresent() ? configured : DemoTravelData.hotel(intent, null);
     }
 
     private Optional<DataBlock> fetchFromSerpApi(IntentDto intent) {

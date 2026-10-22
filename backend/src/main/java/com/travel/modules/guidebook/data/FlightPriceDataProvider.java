@@ -47,7 +47,9 @@ public class FlightPriceDataProvider implements TravelDataProvider {
         if (serp.isPresent()) {
             return serp;
         }
-        return client.fetch(source(), "机票", properties.getFlightPriceUrl(), intent);
+        Optional<DataBlock> configured = client.fetch(source(), "机票",
+                properties.getFlightPriceUrl(), intent);
+        return configured.isPresent() ? configured : DemoTravelData.flight(intent, null);
     }
 
     private Optional<DataBlock> fetchFromSerpApi(IntentDto intent) {

@@ -43,12 +43,17 @@ class VisaPolicyProviderTest {
     }
 
     @Test
-    void returnsEmptyWhenNoPolicyMatches() {
+    void returnsGenericFallbackWhenNoPolicyMatches() {
         when(visaPolicyMapper.selectList(any())).thenReturn(List.of(policy("东京", "需签证", "")));
         IntentDto intent = TestFixtures.intent();
         intent.setDestination("开普敦");
 
-        assertThat(new VisaPolicyProvider(visaPolicyMapper).fetch(intent)).isEmpty();
+        Optional<DataBlock> block = new VisaPolicyProvider(visaPolicyMapper).fetch(intent);
+
+        assertThat(block).isPresent();
+        assertThat(block.get().available()).isTrue();
+        assertThat(block.get().summary()).contains("开普敦", "通用提示");
+        assertThat(block.get().data()).containsEntry("policyType", "generic");
     }
 
     @Test
@@ -66,12 +71,16 @@ class VisaPolicyProviderTest {
     }
 
     @Test
-    void mapperFailureReturnsEmpty() {
+    void mapperFailureReturnsGenericFallback() {
         when(visaPolicyMapper.selectList(any())).thenThrow(new RuntimeException("db down"));
         IntentDto intent = TestFixtures.intent();
         intent.setDestination("开普敦");
 
-        assertThat(new VisaPolicyProvider(visaPolicyMapper).fetch(intent)).isEmpty();
+        Optional<DataBlock> block = new VisaPolicyProvider(visaPolicyMapper).fetch(intent);
+
+        assertThat(block).isPresent();
+        assertThat(block.get().available()).isTrue();
+        assertThat(block.get().summary()).contains("通用提示");
     }
 
     private VisaPolicy policy(String destination, String summary, String requirements) {

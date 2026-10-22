@@ -111,11 +111,11 @@
       <!-- 完成：日程 / 预算 / 贴士 / 溯源 -->
       <div v-else class="draft">
         <el-alert
-          v-if="detail.degradedMode"
+          v-if="visibleDegradationReasons.length"
           type="warning"
           :closable="false"
           show-icon
-          title="本次为降级生成"
+          title="部分内容为模板生成"
           :description="degradationText"
           class="degraded-alert"
         />
@@ -131,11 +131,9 @@
               :key="block.source"
               size="small"
               effect="plain"
-              :type="block.status === 'ok' ? 'success' : 'info'"
+              type="success"
             >
-              {{ sourceLabel(block.source) }}：{{
-                block.status === 'ok' ? (block.summary || '已采集') : '时效未知'
-              }}
+              {{ sourceLabel(block.source) }}：{{ block.summary || '已采集' }}
             </el-tag>
           </div>
         </div>
@@ -795,12 +793,21 @@ const stepIndex = computed(() => {
     || step === 'traceability' || step === 'persist' || step === 'completed') return 5
   return 0
 })
-const degradationText = computed(() => {
-  const reasons = detail.value?.degradationReasons ?? []
-  if (!reasons.length) return '部分资料或实时数据缺失，内容仅供参考。'
-  return reasons.map((r) => DEGRADE_LABELS[r] ?? r).join('；')
-})
-const travelBlocks = computed(() => detail.value?.travelData?.blocks ?? [])
+// 数据源缺失由演示数据兜底，不再作为「降级」提示打扰用户
+const DATA_SOURCE_REASONS = new Set([
+  'weather_unavailable', 'exchange_unavailable', 'local_news_unavailable',
+  'visa_unavailable', 'flight_price_unavailable', 'hotel_price_unavailable',
+  'data_unavailable'
+])
+const visibleDegradationReasons = computed(() =>
+  (detail.value?.degradationReasons ?? []).filter((r) => !DATA_SOURCE_REASONS.has(r)),
+)
+const degradationText = computed(() =>
+  visibleDegradationReasons.value.map((r) => DEGRADE_LABELS[r] ?? r).join('；'),
+)
+const travelBlocks = computed(() =>
+  (detail.value?.travelData?.blocks ?? []).filter((b) => b.status === 'ok'),
+)
 const dataFetchedAt = computed(
   () => detail.value?.travelDataAt ?? detail.value?.travelData?.fetchedAt ?? '',
 )

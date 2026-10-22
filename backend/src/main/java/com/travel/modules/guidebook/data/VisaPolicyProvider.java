@@ -66,7 +66,7 @@ public class VisaPolicyProvider implements TravelDataProvider {
                             || p.getDestination().contains(destination))
                     .findFirst();
             if (matched.isEmpty()) {
-                return Optional.empty();
+                return Optional.of(DemoTravelData.visaFallback(destination, null));
             }
             VisaPolicy policy = matched.get();
             Map<String, Object> data = new LinkedHashMap<>();
@@ -86,7 +86,7 @@ public class VisaPolicyProvider implements TravelDataProvider {
                     LocalDateTime.now().format(TS)));
         } catch (Exception e) {
             log.info("签证政策读取失败 destination={}: {}", destination, e.getMessage());
-            return Optional.empty();
+            return Optional.of(DemoTravelData.visaFallback(destination, null));
         }
     }
 }

@@ -61,14 +61,18 @@ class SerpApiProvidersTest {
     }
 
     @Test
-    void flightFallsBackToTemplateWhenSerpApiUnavailable() {
+    void flightFallsBackToDemoWhenNoSourceAvailable() {
         when(serpApiClient.configured()).thenReturn(false);
         when(httpClient.fetch(eq("flight_price"), any(), any(), any()))
                 .thenReturn(Optional.empty());
 
-        new FlightPriceDataProvider(httpClient, properties, serpApiClient)
+        Optional<DataBlock> block = new FlightPriceDataProvider(httpClient, properties, serpApiClient)
                 .fetch(intent("北京", "东京"));
 
+        assertThat(block).isPresent();
+        assertThat(block.get().available()).isTrue();
+        assertThat(block.get().summary()).contains("机票参考价", "北京→东京");
+        assertThat(block.get().data()).containsEntry("provider", "demo");
         verify(serpApiClient, never()).search(any(), anyMap());
         verify(httpClient).fetch(eq("flight_price"), any(), any(), any());
     }
@@ -79,10 +83,38 @@ class SerpApiProvidersTest {
         when(httpClient.fetch(eq("flight_price"), any(), any(), any()))
                 .thenReturn(Optional.empty());
 
-        new FlightPriceDataProvider(httpClient, properties, serpApiClient)
+        Optional<DataBlock> block = new FlightPriceDataProvider(httpClient, properties, serpApiClient)
                 .fetch(intent(null, "东京"));
 
+        assertThat(block).isPresent();
         verify(serpApiClient, never()).search(any(), anyMap());
+    }
+
+    @Test
+    void hotelFallsBackToDemoWithoutApi() {
+        when(serpApiClient.configured()).thenReturn(false);
+        when(httpClient.fetch(eq("hotel_price"), any(), any(), any()))
+                .thenReturn(Optional.empty());
+
+        Optional<DataBlock> block = new HotelPriceDataProvider(httpClient, properties, serpApiClient)
+                .fetch(intent("北京", "成都"));
+
+        assertThat(block).isPresent();
+        assertThat(block.get().available()).isTrue();
+        assertThat(block.get().summary()).contains("酒店参考价");
+        assertThat(block.get().data()).containsEntry("provider", "demo");
+    }
+
+    @Test
+    void newsFallsBackToDemoWithoutApi() {
+        when(serpApiClient.configured()).thenReturn(false);
+
+        Optional<DataBlock> block = new LocalNewsProvider(objectMapper, webClientBuilder,
+                properties, serpApiClient).fetch(intent("北京", "成都"));
+
+        assertThat(block).isPresent();
+        assertThat(block.get().available()).isTrue();
+        assertThat(block.get().data()).containsEntry("provider", "demo");
     }
 
     @Test

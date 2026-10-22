@@ -54,12 +54,15 @@ public class LocalNewsProvider implements TravelDataProvider {
         if (!StringUtils.hasText(destination)) {
             return Optional.empty();
         }
+        if (!serpApiClient.configured()) {
+            return DemoTravelData.news(intent, null);
+        }
         Optional<DataBlock> serp = fetchFromSerpApi(destination);
         if (serp.isPresent()) {
             return serp;
         }
         Optional<DataBlock> gdelt = fetchFromGdelt(destination);
-        return gdelt.isPresent() ? gdelt : serp;
+        return gdelt.isPresent() ? gdelt : DemoTravelData.news(intent, null);
     }
 
     private Optional<DataBlock> fetchFromSerpApi(String destination) {
