@@ -12,4 +12,6 @@ public class ReferenceGuidebook {
     private String budgetSummary;
     private List<String> culturalTips;
     private List<String> pitfallTips;
+    /** 推荐攻略原文摘要（来自推荐流，非分享快照）：整体塞进提示词，结构见 GuideReferenceBuilder。 */
+    private String rawText;
 }

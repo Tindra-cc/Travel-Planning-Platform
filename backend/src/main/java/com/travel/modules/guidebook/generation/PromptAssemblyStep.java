@@ -169,6 +169,9 @@ public class PromptAssemblyStep implements GenerationStep {
         sb.append("2. 不合适的参考地点直接舍弃，不要为了保留而硬塞；\n");
         sb.append("3. 参考攻略中的任何来源标注都不是你的依据，禁止在 source 中引用它；\n");
         sb.append("4. 实时数据必须使用本次提供的数据，参考攻略里的价格与时间一律视为过期。\n");
+        if (ref.getRawText() != null) {
+            sb.append(ref.getRawText()).append('\n');
+        }
         if (ref.getTitle() != null) {
             sb.append("参考标题：").append(ref.getTitle()).append('\n');
         }

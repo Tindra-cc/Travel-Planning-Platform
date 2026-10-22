@@ -60,16 +60,13 @@ onMounted(async () => {
           class="nav-menu"
           mode="horizontal"
           router
+          :ellipsis="false"
           :default-active="activeMenu"
           @select="onMenuSelect"
         >
           <el-menu-item index="/discover">
             <el-icon><Compass /></el-icon>
             <span>推荐</span>
-          </el-menu-item>
-          <el-menu-item index="/profile">
-            <el-icon><User /></el-icon>
-            <span>画像</span>
           </el-menu-item>
           <el-menu-item index="/chat">
             <el-icon><ChatDotRound /></el-icon>
@@ -83,11 +80,19 @@ onMounted(async () => {
             <el-icon><Suitcase /></el-icon>
             <span>达人</span>
           </el-menu-item>
+          <el-menu-item index="/me">
+            <el-icon><User /></el-icon>
+            <span>个人中心</span>
+          </el-menu-item>
         </el-menu>
 
         <div class="nav-user">
-          <span v-if="auth.userInfo" class="nickname">{{ auth.userInfo.nickname }}</span>
-          <el-button v-if="auth.isLoggedIn" size="small" text @click="onLogout">退出登录</el-button>
+          <template v-if="auth.isLoggedIn">
+            <el-button v-if="auth.userInfo" size="small" text @click="router.push('/me')">
+              {{ auth.userInfo.nickname }}
+            </el-button>
+            <el-button size="small" text @click="onLogout">退出登录</el-button>
+          </template>
           <el-button v-else size="small" @click="router.push({ name: 'login' })">登录</el-button>
         </div>
       </div>

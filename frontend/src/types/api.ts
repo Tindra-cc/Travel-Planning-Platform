@@ -48,6 +48,8 @@ export interface AuthResponse {
 
 export interface CurrentUser {
   userId: string
+  account: string
+  accountType: 'mobile' | 'email' | string
   nickname: string
   userLevel: string
   profileCompleted: boolean

@@ -36,7 +36,7 @@ public class ChatController {
     @Operation(summary = "新建会话（以首条意图消息开场），返回解析出的意图与待澄清问题")
     @PostMapping
     public Result<SessionResponse> createSession(@Valid @RequestBody CreateSessionRequest req) {
-        return Result.success(chatService.createSession(req.getFirstMessage()));
+        return Result.success(chatService.createSession(req.getFirstMessage(), req.getReferencePostId()));
     }
 
     @GetMapping

@@ -51,7 +51,7 @@ function detail(overrides: Partial<SessionDetail> = {}): SessionDetail {
   }
 }
 
-async function mountView() {
+async function mountView(path = '/chat') {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -63,7 +63,7 @@ async function mountView() {
       }
     ]
   })
-  await router.push('/chat')
+  await router.push(path)
   await router.isReady()
   const wrapper = mount(ChatView, { global: { plugins: [router, ElementPlus] } })
   await flushPromises()
@@ -168,9 +168,30 @@ describe('ChatView', () => {
     await send!.trigger('click')
     await flushPromises()
 
-    expect(mockedCreate).toHaveBeenCalledWith('去成都')
+    expect(mockedCreate).toHaveBeenCalledWith('去成都', undefined)
     expect(wrapper.text()).toContain('想去哪个目的地？')
     expect((wrapper.find('textarea').element as HTMLTextAreaElement).value).toBe('')
+    wrapper.unmount()
+  })
+
+  it('从推荐进入时把 postId 作为参考传给创建接口', async () => {
+    mockedCreate.mockResolvedValue({
+      sessionId: '12',
+      status: 'collecting',
+      messages: [],
+      pendingQuestions: []
+    })
+    const { wrapper } = await mountView(
+      '/chat?postId=42&title=成都四日&destination=成都&durationDays=4'
+    )
+
+    expect(wrapper.text()).toContain('参考推荐《成都四日》')
+    await wrapper.find('textarea').setValue('想去成都')
+    const send = wrapper.findAll('button').find((b) => b.text() === '发送')
+    await send!.trigger('click')
+    await flushPromises()
+
+    expect(mockedCreate).toHaveBeenCalledWith('想去成都', '42')
     wrapper.unmount()
   })
 

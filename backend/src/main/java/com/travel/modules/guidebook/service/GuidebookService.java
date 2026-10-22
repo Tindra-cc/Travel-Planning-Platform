@@ -26,6 +26,7 @@ import com.travel.modules.auth.mapper.UserMapper;
 import com.travel.modules.chat.dto.IntentDto;
 import com.travel.modules.chat.entity.ChatSession;
 import com.travel.modules.chat.mapper.ChatSessionMapper;
+import com.travel.modules.guide.service.GuideReferenceBuilder;
 import com.travel.modules.guidebook.dto.BudgetBreakdownDto;
 import com.travel.modules.guidebook.dto.ExportResponse;
 import com.travel.modules.guidebook.dto.GenerateGuidebookRequest;
@@ -69,6 +70,7 @@ public class GuidebookService {
     private final TransactionTemplate transactionTemplate;
     private final ObjectMapper objectMapper;
     private final ResourceService resourceService;
+    private final GuideReferenceBuilder guideReferenceBuilder;
 
     /** §5.1 触发攻略生成；同会话幂等，每用户同一时间只允许一个生成任务。 */
     public GenerateGuidebookResponse generate(GenerateGuidebookRequest req) {
@@ -115,6 +117,10 @@ public class GuidebookService {
             });
             GenerationContext ctx = new GenerationContext(guidebook.getId(), userId, sessionId,
                     intent, snapshot);
+            // 从推荐攻略进入的会话：把推荐内容作为参考骨架带给规划步骤
+            if (session != null && session.getReferencePostId() != null) {
+                ctx.setReference(guideReferenceBuilder.toReference(session.getReferencePostId()));
+            }
             try {
                 runner.submit(ctx);
             } catch (RuntimeException e) {

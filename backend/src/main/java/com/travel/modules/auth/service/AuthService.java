@@ -144,7 +144,8 @@ public class AuthService {
         if (user == null) {
             throw new BizException(ResultCode.NOT_FOUND, "用户不存在");
         }
-        return new CurrentUserResponse(user.getId(), user.getNickname(), user.getUserLevel(),
+        return new CurrentUserResponse(user.getId(), user.getAccount(), user.getAccountType(),
+                user.getNickname(), user.getUserLevel(),
                 user.getProfileCompleted(), user.getDailyGenerateQuota(), user.getDailyGenerateUsed(),
                 l3AccessPolicy.hasAccess(user.getId()));
     }

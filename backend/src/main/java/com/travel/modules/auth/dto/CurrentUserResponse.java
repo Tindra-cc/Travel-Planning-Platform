@@ -8,6 +8,9 @@ import lombok.Data;
 public class CurrentUserResponse {
 
     private Long userId;
+    private String account;
+    /** mobile / email */
+    private String accountType;
     private String nickname;
     private String userLevel;
     private Boolean profileCompleted;

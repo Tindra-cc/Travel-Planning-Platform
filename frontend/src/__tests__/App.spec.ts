@@ -16,6 +16,8 @@ const router = createRouter({
 function user(expertEligible: boolean): CurrentUser {
   return {
     userId: '7',
+    account: 'expert@example.com',
+    accountType: 'email',
     nickname: expertEligible ? '达人甲' : '普通用户',
     userLevel: 'L3',
     profileCompleted: true,

@@ -54,6 +54,8 @@ async function mountExpert(eligible: boolean) {
   const auth = useAuthStore()
   const user: CurrentUser = {
     userId: '7',
+    account: 'expert@example.com',
+    accountType: 'email',
     nickname: '达人甲',
     userLevel: 'L3',
     profileCompleted: true,

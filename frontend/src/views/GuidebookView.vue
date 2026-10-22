@@ -4,13 +4,55 @@
       <el-card>
         <template #header>
           <div class="card-header">
-            <span>旅行攻略</span>
+            <span>我的攻略</span>
+            <el-button size="small" type="primary" @click="goChat">新建攻略</el-button>
           </div>
         </template>
 
-        <div class="empty-state">
+        <div class="list-filters">
+          <el-radio-group v-model="activeStatus" size="small" @change="loadList">
+            <el-radio-button value="">全部</el-radio-button>
+            <el-radio-button value="generating">生成中</el-radio-button>
+            <el-radio-button value="draft">草稿</el-radio-button>
+            <el-radio-button value="editing">编辑中</el-radio-button>
+            <el-radio-button value="confirmed">已确认</el-radio-button>
+            <el-radio-button value="completed">已完成</el-radio-button>
+          </el-radio-group>
+        </div>
+
+        <el-skeleton v-if="listLoading" :rows="5" animated />
+
+        <ul v-else-if="guidebooks.length" class="guidebook-list">
+          <li
+            v-for="item in guidebooks"
+            :key="item.guidebookId"
+            @click="openGuidebook(item.guidebookId)"
+          >
+            <div class="gb-main">
+              <div class="gb-title">{{ item.title || '未命名攻略' }}</div>
+              <div class="gb-meta">
+                <el-tag size="small" :type="statusType(item.status)">
+                  {{ statusLabel(item.status) }}
+                </el-tag>
+                <el-tag v-if="item.version" size="small" effect="plain">v{{ item.version }}</el-tag>
+                <span class="muted">更新于 {{ formatTime(item.updatedAt) }}</span>
+              </div>
+            </div>
+            <div class="gb-side">
+              <el-progress
+                v-if="item.status === 'generating'"
+                :percentage="item.progress ?? 0"
+                :stroke-width="6"
+                class="gb-progress"
+              />
+              <span class="gb-arrow">›</span>
+            </div>
+          </li>
+        </ul>
+
+        <div v-else class="empty-state">
           <div class="empty-ico">🗺️</div>
-          <h3>还没有生成攻略</h3>
+          <h3>这里还没有攻略</h3>
           <p>在「对话」里描述你的旅行需求，信息收集完成后即可一键生成行程与攻略。</p>
           <el-button type="primary" @click="goChat">去对话</el-button>
         </div>
@@ -571,6 +613,7 @@ import type {
   BudgetBreakdown,
   Citation,
   GuidebookDetail,
+  GuidebookListItem,
   GuidebookNode,
   GuidebookVersionItem,
   LinkValidateResult,
@@ -678,6 +721,9 @@ const guidebookId = computed(() => {
   return typeof id === 'string' ? id : ''
 })
 const detail = ref<GuidebookDetail | null>(null)
+const guidebooks = ref<GuidebookListItem[]>([])
+const listLoading = ref(false)
+const activeStatus = ref('')
 const days = ref<EditableDay[]>([])
 const loading = ref(false)
 const retrying = ref(false)
@@ -1421,6 +1467,26 @@ function goChat() {
   router.push(sessionId ? { path: '/chat', query: { sessionId } } : { path: '/chat' })
 }
 
+async function loadList() {
+  listLoading.value = true
+  try {
+    const res = await guidebookApi.listGuidebooks(activeStatus.value || undefined, 1, 50)
+    guidebooks.value = res.list
+  } catch {
+    // 拦截器已提示
+  } finally {
+    listLoading.value = false
+  }
+}
+
+function openGuidebook(id: string) {
+  router.push({ name: 'guidebook-detail', params: { guidebookId: id } })
+}
+
+function formatTime(value: string) {
+  return value ? value.replace('T', ' ').slice(0, 16) : ''
+}
+
 function reset() {
   closeSocket()
   stopPolling()
@@ -1443,6 +1509,8 @@ onMounted(async () => {
   if (guidebookId.value) {
     await load()
     openSocket()
+  } else {
+    await loadList()
   }
 })
 
@@ -1451,6 +1519,8 @@ watch(guidebookId, async (id) => {
   if (id) {
     await load()
     openSocket()
+  } else {
+    await loadList()
   }
 })
 
@@ -1479,6 +1549,67 @@ onBeforeUnmount(reset)
   font-size: 17px;
   font-weight: 600;
   color: var(--text-1);
+}
+
+.list-filters {
+  margin-bottom: var(--space-4);
+}
+.guidebook-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.guidebook-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.guidebook-list li:hover {
+  border-color: var(--brand-500);
+  background: var(--brand-050);
+}
+.gb-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.gb-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gb-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.gb-side {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+.gb-progress {
+  width: 120px;
+}
+.gb-arrow {
+  color: var(--text-3);
+  font-size: 20px;
+  line-height: 1;
 }
 
 .empty-state {

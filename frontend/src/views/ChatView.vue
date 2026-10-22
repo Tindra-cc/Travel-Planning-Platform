@@ -56,6 +56,9 @@
         <el-tag :type="statusType(currentStatus)" effect="light" round>
           {{ statusLabel(currentStatus) }}
         </el-tag>
+        <el-tag v-if="referenceTitle" type="success" effect="plain" round>
+          参考推荐《{{ referenceTitle }}》
+        </el-tag>
         <el-tag v-if="adjustMode" type="warning" effect="dark" round>攻略调整模式</el-tag>
         <el-button
           v-if="currentStatus === 'ready_to_generate'"
@@ -146,6 +149,10 @@ const sending = ref(false)
 const confirming = ref(false)
 const scrollRef = ref<HTMLElement>()
 
+// 从推荐攻略进入时保留来源：传给后端，模型每轮都能看到推荐内容
+const referencePostId = ref<string | null>(null)
+const referenceTitle = ref('')
+
 // 攻略调整是独立的显式模式：请求走 HTTP，结果只做本地展示，不写入会话消息表
 const sessionGuidebookId = ref<string | null>(null)
 const guidebookStatus = ref('')
@@ -174,6 +181,8 @@ function scrollToBottom() {
 function startNew() {
   closeSocket()
   sessionId.value = null
+  referencePostId.value = null
+  referenceTitle.value = ''
   currentStatus.value = ''
   messages.value = []
   pendingQuestions.value = []
@@ -230,7 +239,13 @@ function goGuidebook() {
 
 // 从推荐卡片跳转过来时，用目的地/时长预填首句；从攻略页带 sessionId 回来时直接打开该会话
 function applyContextFromQuery() {
-  const { destination, title, durationDays, sessionId: sid } = route.query
+  const { destination, title, durationDays, postId, sessionId: sid } = route.query
+  if (typeof postId === 'string' && postId) {
+    referencePostId.value = postId
+  }
+  if (typeof title === 'string') {
+    referenceTitle.value = title
+  }
   if (typeof sid === 'string' && sid) {
     void selectSession(sid)
     return
@@ -302,7 +317,7 @@ async function sendAdjust(content: string) {
 }
 
 async function createAndSend(content: string) {
-  const res = await chatApi.createSession(content)
+  const res = await chatApi.createSession(content, referencePostId.value ?? undefined)
   sessionId.value = res.sessionId
   currentStatus.value = res.status
   messages.value = res.messages

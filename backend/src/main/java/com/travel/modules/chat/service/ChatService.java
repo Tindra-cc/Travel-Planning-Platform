@@ -26,6 +26,8 @@ import com.travel.modules.chat.entity.ChatMessage;
 import com.travel.modules.chat.entity.ChatSession;
 import com.travel.modules.chat.mapper.ChatMessageMapper;
 import com.travel.modules.chat.mapper.ChatSessionMapper;
+import com.travel.modules.guide.entity.GuidePost;
+import com.travel.modules.guide.service.GuideReferenceBuilder;
 import com.travel.modules.guidebook.dto.GenerateGuidebookResponse;
 import com.travel.modules.guidebook.service.GuidebookService;
 
@@ -41,21 +43,27 @@ public class ChatService {
     private final ChatMessageMapper messageMapper;
     private final IntentService intentService;
     private final GuidebookService guidebookService;
+    private final GuideReferenceBuilder guideReferenceBuilder;
 
     /** §4.1 创建会话：保存首条用户消息 → 分析意图 → 落库 AI 回复。 */
-    public SessionResponse createSession(String firstMessage) {
+    public SessionResponse createSession(String firstMessage, Long referencePostId) {
         Long userId = UserContext.getUserId();
+        GuidePost reference = guideReferenceBuilder.published(referencePostId);
+        if (referencePostId != null && reference == null) {
+            throw new BizException(ResultCode.NOT_FOUND, "参考攻略不存在或已下架");
+        }
 
         ChatSession session = new ChatSession();
         session.setUserId(userId);
         session.setTitle(title(firstMessage));
         session.setStatus(ChatSession.STATUS_COLLECTING);
+        session.setReferencePostId(reference == null ? null : reference.getId());
         sessionMapper.insert(session);
 
         ChatMessage userMsg = appendMessage(session.getId(), ChatMessage.ROLE_USER, firstMessage, null);
 
         List<AiMessage> history = toAiHistory(List.of(userMsg));
-        var result = intentService.analyze(history);
+        var result = intentService.analyze(withReference(session, history));
 
         applyAnalysis(session, result);
         ChatMessage assistantMsg = appendMessage(session.getId(), ChatMessage.ROLE_ASSISTANT,
@@ -77,6 +85,7 @@ public class ChatService {
         resp.setSessionId(session.getId());
         resp.setStatus(session.getStatus());
         resp.setGuidebookId(session.getGuidebookId());
+        resp.setReferencePostId(session.getReferencePostId());
         resp.setIntent(session.getIntent());
         resp.setPendingQuestions(session.getPendingQuestions());
         resp.setMessages(loadMessages(sessionId));
@@ -94,7 +103,7 @@ public class ChatService {
                 Wrappers.<ChatMessage>lambdaQuery()
                         .eq(ChatMessage::getSessionId, sessionId)
                         .orderByAsc(ChatMessage::getId));
-        var result = intentService.analyze(toAiHistory(all));
+        var result = intentService.analyze(withReference(session, toAiHistory(all)));
 
         applyAnalysis(session, result);
         ChatMessage assistantMsg = appendMessage(sessionId, ChatMessage.ROLE_ASSISTANT,
@@ -162,6 +171,18 @@ public class ChatService {
                                 .eq(ChatMessage::getSessionId, sessionId)
                                 .orderByAsc(ChatMessage::getId))
                 .stream().map(this::toDto).toList();
+    }
+
+    /** 会话来自推荐攻略时，每轮都把推荐内容作为系统上下文传给模型。 */
+    private List<AiMessage> withReference(ChatSession session, List<AiMessage> history) {
+        String context = guideReferenceBuilder.contextText(session.getReferencePostId());
+        if (context == null) {
+            return history;
+        }
+        List<AiMessage> messages = new ArrayList<>(history.size() + 1);
+        messages.add(AiMessage.system(context));
+        messages.addAll(history);
+        return messages;
     }
 
     private List<AiMessage> toAiHistory(List<ChatMessage> messages) {

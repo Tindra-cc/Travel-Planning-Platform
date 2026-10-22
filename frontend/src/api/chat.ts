@@ -8,11 +8,11 @@ import type {
   SessionResponse
 } from '@/types/api'
 
-export function createSession(firstMessage: string) {
+export function createSession(firstMessage: string, referencePostId?: string) {
   return request<SessionResponse>({
     url: '/chat/sessions',
     method: 'post',
-    data: { firstMessage }
+    data: { firstMessage, referencePostId }
   })
 }
 

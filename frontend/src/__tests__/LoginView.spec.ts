@@ -82,6 +82,8 @@ describe('LoginView', () => {
     })
     mockedFetchMe.mockResolvedValue({
       userId: '1',
+      account: 'a@b.com',
+      accountType: 'email',
       nickname: '旅行者',
       userLevel: 'L1',
       profileCompleted: false,

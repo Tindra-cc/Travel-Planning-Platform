@@ -34,4 +34,7 @@ public class ChatSession extends BaseEntity {
     private List<PendingQuestion> pendingQuestions;
 
     private Long guidebookId;
+
+    /** 用户从哪篇推荐攻略进入的对话（V24）；为空表示普通对话。 */
+    private Long referencePostId;
 }
