@@ -65,7 +65,8 @@ describe('ShareDialog', () => {
     expect(mockedCreate).toHaveBeenCalledWith('1', 'link')
     const linkInput = wrapper.find('input[readonly]').element as HTMLInputElement
     expect(linkInput.value).toBe('http://localhost:5173/share/abc123')
-    expect(wrapper.text()).toContain('二维码未配置')
+    // 未配置二维码服务时前端本地生成 SVG
+    expect(wrapper.find('.qrcode svg').exists()).toBe(true)
     expect(wrapper.find('.qrcode img').exists()).toBe(false)
     wrapper.unmount()
   })

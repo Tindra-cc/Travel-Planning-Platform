@@ -40,7 +40,7 @@ class GuidebookTemplateComposerTest {
 
         assertThat(budget.getItems()).hasSize(5);
         assertThat(budget.getTotal().getMin()).isLessThan(new BigDecimal("3000"));
-        assertThat(budget.getTotal().getMax()).isGreaterThan(new BigDecimal("3000"));
+        assertThat(budget.getTotal().getMax()).isLessThanOrEqualTo(new BigDecimal("3000"));
     }
 
     private IntentDto intent(String start, String end) {

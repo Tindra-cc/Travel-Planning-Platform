@@ -290,6 +290,37 @@ class GuidebookEditServiceTest {
     }
 
     @Test
+    void moveNodeReordersTimelineByNewNodeOrder() {
+        Guidebook guidebook = guidebook(Guidebook.STATUS_DRAFT);
+        stubUpdateSuccess(guidebook);
+
+        service.moveNode(GUIDEBOOK_ID, "d1-1", new MoveNodeRequest(1, 1));
+
+        assertThat(guidebook.getDays().get(0).getNodes())
+                .extracting(GuidebookNodeDto::getNodeId)
+                .containsExactly("d1-2", "d1-1");
+        assertThat(guidebook.getDays().get(0).getNodes())
+                .extracting(n -> n.getTimeSlot().getStart() + "-" + n.getTimeSlot().getEnd())
+                .containsExactly("09:00-10:00", "10:30-12:30");
+    }
+
+    @Test
+    void moveNodeAcrossDaysReschedulesBothDays() {
+        Guidebook guidebook = guidebook(Guidebook.STATUS_DRAFT);
+        stubUpdateSuccess(guidebook);
+
+        service.moveNode(GUIDEBOOK_ID, "d1-2", new MoveNodeRequest(2, 0));
+
+        assertThat(guidebook.getDays().get(0).getNodes())
+                .extracting(n -> n.getTimeSlot().getStart() + "-" + n.getTimeSlot().getEnd())
+                .containsExactly("09:00-11:00");
+        // 目标日原本为空：保留被移动节点的时段，只保证顺序与不重叠
+        assertThat(guidebook.getDays().get(1).getNodes())
+                .extracting(n -> n.getTimeSlot().getStart() + "-" + n.getTimeSlot().getEnd())
+                .containsExactly("12:00-13:00");
+    }
+
+    @Test
     void moveNodeRejectsOutOfRangeIndexWithinSameDay() {
         Guidebook guidebook = guidebook(Guidebook.STATUS_DRAFT);
         when(guidebookMapper.selectById(GUIDEBOOK_ID)).thenReturn(guidebook);

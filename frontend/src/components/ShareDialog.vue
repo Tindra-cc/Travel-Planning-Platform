@@ -18,7 +18,8 @@
       <div v-if="result.qrcodeUrl" class="qrcode">
         <img :src="result.qrcodeUrl" alt="分享二维码" />
       </div>
-      <p v-else class="hint">二维码未配置，可复制链接分享。</p>
+      <div v-else-if="qrSvg" class="qrcode" v-html="qrSvg"></div>
+      <p v-else-if="qrFailed" class="hint">二维码生成失败，可复制链接分享。</p>
       <p class="hint">分享内容为创建时的只读快照，之后编辑原攻略不会改变它。</p>
     </template>
 
@@ -35,8 +36,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import QRCode from 'qrcode'
 import { createShare, revokeShare } from '@/api/share'
 import type { ShareCreateResponse } from '@/types/api'
 
@@ -47,6 +49,24 @@ const channel = ref<'link' | 'qrcode'>('link')
 const creating = ref(false)
 const revoking = ref(false)
 const result = ref<ShareCreateResponse | null>(null)
+const qrSvg = ref('')
+const qrFailed = ref(false)
+
+// 未配置二维码服务时本地生成 SVG，确保链接分享始终有可扫的码
+watch(result, async (value) => {
+  qrSvg.value = ''
+  qrFailed.value = false
+  if (!value || value.qrcodeUrl) return
+  try {
+    qrSvg.value = await QRCode.toString(value.shareUrl, {
+      type: 'svg',
+      margin: 1,
+      width: 200
+    })
+  } catch {
+    qrFailed.value = true
+  }
+})
 
 async function onCreate() {
   creating.value = true
@@ -95,7 +115,8 @@ function reset() {
   margin-top: 16px;
   text-align: center;
 }
-.qrcode img {
+.qrcode img,
+.qrcode :deep(svg) {
   width: 200px;
   height: 200px;
 }

@@ -195,16 +195,16 @@ class GuidebookServiceTest {
     }
 
     @Test
-    void quotaExceededIsRejectedAndLockReleased() {
+    void quotaExceededStillGenerates() {
         User user = newUser();
         user.setDailyGenerateUsed(3);
-        when(values.setIfAbsent(eq(LOCK_KEY), eq("1"), any(Duration.class))).thenReturn(true);
-        when(runner.hasCapacity()).thenReturn(true);
-        when(userMapper.selectForUpdate(USER_ID)).thenReturn(user);
+        stubGenerationAllowed(user);
 
-        assertBizCode(() -> service.generate(directRequest()), ResultCode.TOO_MANY_REQUEST);
-        verify(guidebookMapper, never()).insert(any(Guidebook.class));
-        verify(redis).delete(LOCK_KEY);
+        GenerateGuidebookResponse response = service.generate(directRequest());
+
+        assertThat(response.getGuidebookId()).isEqualTo(50L);
+        assertThat(user.getDailyGenerateUsed()).isEqualTo(4);
+        verify(guidebookMapper).insert(any(Guidebook.class));
     }
 
     @Test

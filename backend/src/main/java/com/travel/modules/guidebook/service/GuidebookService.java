@@ -320,12 +320,12 @@ public class GuidebookService {
 
     // ---- 内部方法 ----
 
-    /** 每次普通生成扣一次配额；对比生成一次扣一次（由调用方只调用一次）。 */
+    /** 每次普通生成扣一次计数；对比生成一次扣一次（由调用方只调用一次）。 */
     public void consumeQuotaOnce(Long userId) {
         consumeQuota(userId, 1);
     }
 
-    /** 批量预扣：不足时整体失败，不产生任何扣减。调用方负责事务边界。 */
+    /** 批量计数：仅累计当日生成次数，暂不限制上限。调用方负责事务边界。 */
     public void consumeQuota(Long userId, int count) {
         User user = userMapper.selectForUpdate(userId);
         if (user == null) {
@@ -335,13 +335,6 @@ public class GuidebookService {
         int used = user.getDailyGenerateUsed() == null ? 0 : user.getDailyGenerateUsed();
         if (!today.equals(user.getGenerateQuotaDate())) {
             used = 0;
-        }
-        int quota = user.getDailyGenerateQuota() == null ? 3 : user.getDailyGenerateQuota();
-        if (used + count > quota) {
-            throw new BizException(ResultCode.TOO_MANY_REQUEST,
-                    count == 1
-                            ? "今日生成次数已用完（每日 " + quota + " 次）"
-                            : "今日生成次数不足（需要 " + count + " 次，剩余 " + (quota - used) + " 次）");
         }
         user.setDailyGenerateUsed(used + count);
         user.setGenerateQuotaDate(today);

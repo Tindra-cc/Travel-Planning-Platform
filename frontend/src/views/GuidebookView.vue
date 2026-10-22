@@ -152,7 +152,7 @@
           </template>
           <el-button @click="openVersions">版本历史</el-button>
           <el-button v-if="canCompare" @click="openCompare">生成对比方案</el-button>
-          <el-button v-if="canUseCompanion" type="primary" plain @click="openCompanion">
+          <el-button v-if="canUseCompanion" @click="openCompanion">
             {{ detail.status === 'executing' ? '进入行程伴侣' : '行程伴侣' }}
           </el-button>
           <el-button

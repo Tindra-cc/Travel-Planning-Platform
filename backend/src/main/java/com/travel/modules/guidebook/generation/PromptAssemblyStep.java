@@ -60,13 +60,14 @@ public class PromptAssemblyStep implements GenerationStep {
               "pitfallTips": ["避坑提示"]
             }
             要求：
-            1. 每天至少 4 个节点，时间不重叠，覆盖上午、午餐、下午、晚餐；
+            1. 每天至少 4 个节点，覆盖上午、午餐、下午、晚餐；同一天内节点时间严禁重叠，后一节点的 start 必须晚于前一节点 end；
             2. type 只能取 activity/meal/transport/stay/free；
             3. 时间格式 HH:mm，金额为数字且币种与用户预算一致；
             4. 优先使用提供的资料，并在 source 中以 [K1] 形式标注依据；
             5. 资料为空或未使用资料时，source 留空，不要在正文或字段里提及资料库、检索结果或信息来源不足；
             6. 不要编造资料中不存在的门票价格或营业时间；
-            7. 实时数据只使用标记为可用的源；不可用时直接略过，不要写「时效未知」或任何数据缺失说明，禁止编造价格、天气或营业时间。
+            7. 实时数据只使用标记为可用的源；不可用时直接略过，不要写「时效未知」或任何数据缺失说明，禁止编造价格、天气或营业时间；
+            8. budgetBreakdown 的 total.max 不得超过用户预算金额：预算不足时压缩住宿与交通档次，而不是让总额超限。
             """;
 
     private static final Map<String, String> SOURCE_LABELS = Map.of(

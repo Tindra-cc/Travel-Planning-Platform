@@ -12,14 +12,6 @@
         </div>
       </div>
 
-      <div class="quota">
-        <div class="quota-head">
-          <span>今日生成配额</span>
-          <span class="muted">{{ used }} / {{ quota }}</span>
-        </div>
-        <el-progress :percentage="quotaPercent" :stroke-width="8" :show-text="false" />
-      </div>
-
       <el-alert
         v-if="user && !user.profileCompleted"
         type="warning"
@@ -130,11 +122,6 @@ const guidebookLoading = ref(false)
 const sessionLoading = ref(false)
 
 const avatarText = computed(() => (user.value?.nickname ?? '旅').slice(0, 1))
-const used = computed(() => user.value?.dailyGenerateUsed ?? 0)
-const quota = computed(() => user.value?.dailyGenerateQuota ?? 0)
-const quotaPercent = computed(() =>
-  quota.value > 0 ? Math.min(100, Math.round((used.value / quota.value) * 100)) : 0
-)
 
 function statusLabel(status: string) {
   return GUIDEBOOK_STATUS_LABELS[status] ?? status
@@ -226,20 +213,6 @@ onMounted(async () => {
   gap: var(--space-2);
   font-size: 13px;
   color: var(--text-2);
-}
-
-.quota {
-  margin-top: var(--space-5);
-}
-.quota-head {
-  display: flex;
-  justify-content: space-between;
-  font-size: 13px;
-  color: var(--text-2);
-  margin-bottom: 6px;
-}
-.muted {
-  color: var(--text-3);
 }
 
 .profile-alert {

@@ -88,7 +88,9 @@
       </template>
       <el-table :data="travelers" empty-text="暂无出行人档案">
         <el-table-column prop="name" label="姓名" />
-        <el-table-column prop="idType" label="证件类型" />
+        <el-table-column prop="idType" label="证件类型">
+          <template #default="{ row }">{{ idTypeLabel(row.idType) }}</template>
+        </el-table-column>
         <el-table-column prop="idNumber" label="证件号" />
         <el-table-column prop="birthDate" label="出生日期" />
         <el-table-column prop="specialNeeds" label="特殊需求" />
@@ -104,7 +106,16 @@
     <el-dialog v-model="dialogVisible" :title="travelerForm.travelerId ? '编辑出行人' : '新增出行人'">
       <el-form :model="travelerForm" label-width="90px">
         <el-form-item label="姓名"><el-input v-model="travelerForm.name" /></el-form-item>
-        <el-form-item label="证件类型"><el-input v-model="travelerForm.idType" /></el-form-item>
+        <el-form-item label="证件类型">
+          <el-select v-model="travelerForm.idType" placeholder="请选择证件类型">
+            <el-option
+              v-for="option in ID_TYPE_OPTIONS"
+              :key="option.value"
+              :label="option.label"
+              :value="option.value"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="证件号"><el-input v-model="travelerForm.idNumber" /></el-form-item>
         <el-form-item label="出生日期">
           <el-date-picker v-model="travelerForm.birthDate" type="date" value-format="YYYY-MM-DD" />
@@ -196,6 +207,19 @@ const advanced = ref({
 })
 const version = ref<number | null>(null)
 const saving = ref(false)
+
+const ID_TYPE_OPTIONS = [
+  { value: 'id_card', label: '身份证' },
+  { value: 'passport', label: '护照' },
+  { value: 'hk_macao_permit', label: '港澳通行证' },
+  { value: 'taiwan_permit', label: '台湾通行证' },
+  { value: 'other', label: '其他' }
+]
+
+function idTypeLabel(value?: string) {
+  if (!value) return ''
+  return ID_TYPE_OPTIONS.find((option) => option.value === value)?.label ?? value
+}
 
 const travelers = ref<TravelerResponse[]>([])
 const dialogVisible = ref(false)

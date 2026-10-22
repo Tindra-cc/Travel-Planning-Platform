@@ -73,11 +73,14 @@ class GuidebookServiceQuotaTest {
     }
 
     @Test
-    void consumeQuotaRejectsBatchLargerThanRemainingWithoutDeducting() {
+    void consumeQuotaAllowsExceedingDailyQuota() {
         when(userMapper.selectForUpdate(USER_ID)).thenReturn(user(1, 3, LocalDate.now()));
 
-        assertBizCode(() -> service().consumeQuota(USER_ID, 5), ResultCode.TOO_MANY_REQUEST);
-        verify(userMapper, never()).updateById(any(User.class));
+        service().consumeQuota(USER_ID, 5);
+
+        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+        verify(userMapper).updateById(captor.capture());
+        assertThat(captor.getValue().getDailyGenerateUsed()).isEqualTo(6);
     }
 
     @Test

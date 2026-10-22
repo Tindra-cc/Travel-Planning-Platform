@@ -72,7 +72,7 @@ services:
       SERPAPI_KEY: ${SERPAPI_KEY:-}
       SERPAPI_URL: ${SERPAPI_URL:-https://serpapi.com/search.json}
       # FR-12 分享公开页地址；生产应填真实前端域名
-      SHARE_BASE_URL: ${SHARE_BASE_URL:-http://localhost}
+      SHARE_BASE_URL: ${SHARE_BASE_URL:-http://47.94.2.182}
       SHARE_EXPIRE_DAYS: ${SHARE_EXPIRE_DAYS:-30}
       SHARE_QRCODE_URL_TEMPLATE: ${SHARE_QRCODE_URL_TEMPLATE:-}
       # FR-10 行程伴侣定时扫描（refresh 接口不受开关影响）

@@ -1,5 +1,8 @@
 package com.travel.modules.guidebook.service;
 
+import java.time.Duration;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -18,6 +21,7 @@ import com.travel.modules.guidebook.dto.GuidebookEditResponse;
 import com.travel.modules.guidebook.dto.GuidebookNodeDto;
 import com.travel.modules.guidebook.dto.MoveNodeRequest;
 import com.travel.modules.guidebook.dto.NodeConflictDto;
+import com.travel.modules.guidebook.dto.TimeSlotDto;
 import com.travel.modules.guidebook.dto.UpdateNodeRequest;
 import com.travel.modules.guidebook.edit.ConflictDetector;
 import com.travel.modules.guidebook.entity.Guidebook;
@@ -38,6 +42,11 @@ public class GuidebookEditService {
         List.of(Guidebook.STATUS_DRAFT,Guidebook.STATUS_EDITING);
     private static final List<String> NODE_TYPES =
         List.of("activity","meal","transport","stay","free");
+    private static final int DEFAULT_NODE_MINUTES = 60;
+    private static final int NODE_GAP_MINUTES = 30;
+    private static final LocalTime DEFAULT_DAY_START = LocalTime.of(9, 0);
+    private static final LocalTime DAY_END = LocalTime.of(23, 59);
+    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
     
     private final GuidebookMapper guidebookMapper;
     private final GuidebookVersionService versionService;
@@ -208,8 +217,79 @@ public class GuidebookEditService {
         sourceDay.getNodes().remove(moving);
         targetDay.getNodes().add(req.getTargetIndex(), moving);
 
+        // 重排时间线：按节点顺序重新分配时段，消除拖动造成的乱序与重叠
+        rescheduleDay(targetDay);
+        if (sourceDay != targetDay) {
+            rescheduleDay(sourceDay);
+        }
+
         return  save(guidebook, "将节点【" + nodeName(moving) + "]从Day" + sourceDay.getDay() + "移动到Day" +targetDay.getDay() + "第" + (req.getTargetIndex() + 1)  + "位");
         }
+
+    /**
+     * 按列表顺序重排一天的时间线：保留每个节点的时长，节点之间留出固定转场间隔。
+     * 起点取当天最早的开始时间，保证拖动后时间仍是单调递增的。
+     */
+    private void rescheduleDay(GuidebookDayDto day) {
+        if (day == null || day.getNodes() == null || day.getNodes().isEmpty()) {
+            return;
+        }
+        LocalTime cursor = earliestStart(day);
+        for (GuidebookNodeDto node : day.getNodes()) {
+            if (node == null) {
+                continue;
+            }
+            LocalTime start = parseTime(node.getTimeSlot() == null ? null : node.getTimeSlot().getStart());
+            LocalTime end = parseTime(node.getTimeSlot() == null ? null : node.getTimeSlot().getEnd());
+            long duration = start != null && end != null && end.isAfter(start)
+                    ? Duration.between(start, end).toMinutes()
+                    : DEFAULT_NODE_MINUTES;
+
+            long available = Duration.between(cursor, DAY_END).toMinutes();
+            if (available < 1) {
+                cursor = DAY_END.minusMinutes(1);
+                available = 1;
+            }
+            duration = Math.min(duration, available);
+
+            LocalTime newEnd = cursor.plusMinutes(duration);
+            if (node.getTimeSlot() == null) {
+                node.setTimeSlot(new TimeSlotDto());
+            }
+            node.getTimeSlot().setStart(cursor.format(TIME_FORMAT));
+            node.getTimeSlot().setEnd(newEnd.format(TIME_FORMAT));
+
+            cursor = newEnd.plusMinutes(NODE_GAP_MINUTES);
+            if (cursor.isAfter(DAY_END)) {
+                cursor = DAY_END;
+            }
+        }
+    }
+
+    private LocalTime earliestStart(GuidebookDayDto day) {
+        LocalTime earliest = null;
+        for (GuidebookNodeDto node : day.getNodes()) {
+            if (node == null || node.getTimeSlot() == null) {
+                continue;
+            }
+            LocalTime start = parseTime(node.getTimeSlot().getStart());
+            if (start != null && (earliest == null || start.isBefore(earliest))) {
+                earliest = start;
+            }
+        }
+        return earliest == null ? DEFAULT_DAY_START : earliest;
+    }
+
+    private LocalTime parseTime(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalTime.parse(value, TIME_FORMAT);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
 
         /**
          * 保存编辑结果：转台转editing -> 乐观锁更新当前表 + 追加manual 快照

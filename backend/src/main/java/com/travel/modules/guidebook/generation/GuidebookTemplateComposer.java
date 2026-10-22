@@ -99,7 +99,7 @@ public class GuidebookTemplateComposer {
             BigDecimal ratio = new BigDecimal(RATIOS[i]);
             BigDecimal base = amount.multiply(ratio);
             BigDecimal min = base.multiply(new BigDecimal("0.85")).setScale(0, RoundingMode.HALF_UP);
-            BigDecimal max = base.multiply(new BigDecimal("1.15")).setScale(0, RoundingMode.HALF_UP);
+            BigDecimal max = base.multiply(new BigDecimal("1.00")).setScale(0, RoundingMode.HALF_UP);
             totalMin = totalMin.add(min);
             totalMax = totalMax.add(max);
             items.add(new BudgetBreakdownDto.Item(CATEGORIES[i], min, max));
