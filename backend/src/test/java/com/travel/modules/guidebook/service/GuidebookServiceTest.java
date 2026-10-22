@@ -279,6 +279,22 @@ class GuidebookServiceTest {
     }
 
     @Test
+    void detailSortsNodesByStartTime() {
+        Guidebook guidebook = TestFixtures.guidebook(GUIDEBOOK_ID, USER_ID, Guidebook.STATUS_DRAFT);
+        guidebook.setDays(List.of(new com.travel.modules.guidebook.dto.GuidebookDayDto(
+                1, List.of(
+                        TestFixtures.node("d1-2", "14:00", "15:00", "人民公园"),
+                        TestFixtures.node("d1-1", "09:00", "10:00", "宽窄巷子")))));
+        when(guidebookMapper.selectById(GUIDEBOOK_ID)).thenReturn(guidebook);
+
+        GuidebookDetailResponse response = service.detail(GUIDEBOOK_ID);
+
+        assertThat(response.getDays().get(0).getNodes())
+                .extracting(com.travel.modules.guidebook.dto.GuidebookNodeDto::getNodeId)
+                .containsExactly("d1-1", "d1-2");
+    }
+
+    @Test
     void deleteRejectsConfirmedGuidebook() {
         when(guidebookMapper.selectById(GUIDEBOOK_ID))
                 .thenReturn(TestFixtures.guidebook(GUIDEBOOK_ID, USER_ID, Guidebook.STATUS_CONFIRMED));

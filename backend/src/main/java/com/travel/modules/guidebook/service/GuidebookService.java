@@ -3,7 +3,10 @@ package com.travel.modules.guidebook.service;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -203,6 +206,7 @@ public class GuidebookService {
         resp.setTitle(guidebook.getTitle());
         resp.setIntent(guidebook.getIntent());
         resourceService.enrichNodes(guidebook.getDays());
+        sortDaysByTime(guidebook.getDays());
         resp.setDays(guidebook.getDays());
         resp.setBudgetBreakdown(guidebook.getBudgetBreakdown());
         resp.setPackingList(guidebook.getPackingList());
@@ -217,6 +221,33 @@ public class GuidebookService {
         resp.setProgress(guidebook.getProgress());
         resp.setErrorMessage(guidebook.getErrorMessage());
         return resp;
+    }
+
+    /** 展示前按开始时间排序，历史数据里的节点顺序也能呈现为连续时间线。 */
+    private void sortDaysByTime(List<GuidebookDayDto> days) {
+        if (days == null) {
+            return;
+        }
+        for (GuidebookDayDto day : days) {
+            if (day == null || day.getNodes() == null || day.getNodes().size() < 2) {
+                continue;
+            }
+            List<GuidebookNodeDto> sorted = new ArrayList<>(day.getNodes());
+            sorted.sort(Comparator.comparing(GuidebookService::nodeStart,
+                    Comparator.nullsLast(Comparator.naturalOrder())));
+            day.setNodes(sorted);
+        }
+    }
+
+    private static LocalTime nodeStart(GuidebookNodeDto node) {
+        if (node == null || node.getTimeSlot() == null || node.getTimeSlot().getStart() == null) {
+            return null;
+        }
+        try {
+            return LocalTime.parse(node.getTimeSlot().getStart(), DateTimeFormatter.ofPattern("HH:mm"));
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 
     /** §5.3 失败重试；复用原行，最多 3 次。 */

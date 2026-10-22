@@ -206,6 +206,13 @@ public class GuidebookEditService {
             throw new  BizException(ResultCode.NOT_FOUND,"节点不存在");
         }
         GuidebookDayDto targetDay = findDay(guidebook,req.getTargetDay());
+        // 前端展示的是按时间排序后的顺序，这里先对齐再按 targetIndex 插入
+        if (sourceDay != null) {
+            sortNodesByTime(sourceDay);
+        }
+        if (targetDay != sourceDay) {
+            sortNodesByTime(targetDay);
+        }
         int finalSize = (targetDay == sourceDay)
                         ? targetDay.getNodes().size() - 1
                         : targetDay.getNodes().size();
@@ -264,6 +271,20 @@ public class GuidebookEditService {
                 cursor = DAY_END;
             }
         }
+    }
+
+    /** 按开始时间排序；无时间的节点放末尾，保持原有相对顺序。 */
+    private void sortNodesByTime(GuidebookDayDto day) {
+        if (day == null || day.getNodes() == null || day.getNodes().size() < 2) {
+            return;
+        }
+        List<GuidebookNodeDto> sorted = new ArrayList<>(day.getNodes());
+        sorted.sort(java.util.Comparator.comparing(
+                node -> node == null || node.getTimeSlot() == null
+                        ? null
+                        : parseTime(node.getTimeSlot().getStart()),
+                java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())));
+        day.setNodes(sorted);
     }
 
     private LocalTime earliestStart(GuidebookDayDto day) {
