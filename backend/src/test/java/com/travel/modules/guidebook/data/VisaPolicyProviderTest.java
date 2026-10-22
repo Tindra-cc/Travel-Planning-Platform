@@ -2,6 +2,8 @@ package com.travel.modules.guidebook.data;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
@@ -43,15 +45,33 @@ class VisaPolicyProviderTest {
     @Test
     void returnsEmptyWhenNoPolicyMatches() {
         when(visaPolicyMapper.selectList(any())).thenReturn(List.of(policy("东京", "需签证", "")));
+        IntentDto intent = TestFixtures.intent();
+        intent.setDestination("开普敦");
 
-        assertThat(new VisaPolicyProvider(visaPolicyMapper).fetch(TestFixtures.intent())).isEmpty();
+        assertThat(new VisaPolicyProvider(visaPolicyMapper).fetch(intent)).isEmpty();
+    }
+
+    @Test
+    void domesticDestinationIsAvailableWithoutLookup() {
+        IntentDto intent = TestFixtures.intent();
+        intent.setDestination("成都");
+
+        Optional<DataBlock> block = new VisaPolicyProvider(visaPolicyMapper).fetch(intent);
+
+        assertThat(block).isPresent();
+        assertThat(block.get().available()).isTrue();
+        assertThat(block.get().summary()).contains("无需签证");
+        assertThat(block.get().data()).containsEntry("policyType", "domestic");
+        verify(visaPolicyMapper, never()).selectList(any());
     }
 
     @Test
     void mapperFailureReturnsEmpty() {
         when(visaPolicyMapper.selectList(any())).thenThrow(new RuntimeException("db down"));
+        IntentDto intent = TestFixtures.intent();
+        intent.setDestination("开普敦");
 
-        assertThat(new VisaPolicyProvider(visaPolicyMapper).fetch(TestFixtures.intent())).isEmpty();
+        assertThat(new VisaPolicyProvider(visaPolicyMapper).fetch(intent)).isEmpty();
     }
 
     private VisaPolicy policy(String destination, String summary, String requirements) {

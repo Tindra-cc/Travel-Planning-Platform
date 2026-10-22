@@ -65,7 +65,6 @@
           <p v-if="detail.summary" class="summary">{{ detail.summary }}</p>
 
           <div class="actions">
-            <el-button v-if="detail.sourceUrl" :icon="Link" @click="openSource">查看原文</el-button>
             <el-button type="primary" @click="goChat">按这个生成我的行程</el-button>
           </div>
         </div>
@@ -100,7 +99,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, Dish, House, KnifeFork, Link, Location, Van } from '@element-plus/icons-vue'
+import { ArrowLeft, Dish, House, KnifeFork, Location, Van } from '@element-plus/icons-vue'
 import { getGuideDetail } from '@/api/guide'
 import type { GuidePostDetail } from '@/types/api'
 
@@ -161,12 +160,6 @@ function formatCount(n: number) {
 
 function budgetLabel(level: string) {
   return BUDGET_LABELS[level] ?? level
-}
-
-function openSource() {
-  if (detail.value?.sourceUrl) {
-    window.open(detail.value.sourceUrl, '_blank', 'noopener,noreferrer')
-  }
 }
 
 function goBack() {

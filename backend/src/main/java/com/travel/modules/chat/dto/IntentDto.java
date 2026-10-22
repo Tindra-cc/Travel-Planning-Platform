@@ -12,6 +12,8 @@ import lombok.Data;
 public class IntentDto {
 
     private String destination;
+    /** 出发城市，用于机票查询；未提供时机票价格源标记 unavailable。 */
+    private String origin;
     private DateWindow dateWindow;
     private Party party;
     private Budget budget;

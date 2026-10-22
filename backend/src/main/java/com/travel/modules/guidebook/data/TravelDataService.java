@@ -33,7 +33,9 @@ public class TravelDataService {
     private static final int DEFAULT_PRIORITY = 100;
     private static final int DEFAULT_TTL_SECONDS = 1800;
     /** 数据层总预算；超时后剩余源直接标 unavailable，避免拖垮生成。 */
-    private static final int BUDGET_SECONDS = 10;
+    private static final int BUDGET_SECONDS = 15;
+    /** 失败结果短缓存：避免同一目的地反复打外部接口（SerpAPI 免费额度有限）。 */
+    private static final Duration MISS_TTL = Duration.ofSeconds(300);
 
     private final List<TravelDataProvider> providers;
     private final DataSourceConfigMapper configMapper;
@@ -79,15 +81,41 @@ public class TravelDataService {
         if (cached.isPresent()) {
             return cached;
         }
+        if (failedRecently(key)) {
+            return Optional.empty();
+        }
         Optional<DataBlock> fetched;
         try {
             fetched = provider.fetch(intent);
         } catch (Exception e) {
             log.info("实时数据源异常 source={}: {}", provider.source(), e.getMessage());
+            markFailed(key);
             return Optional.empty();
         }
-        fetched.ifPresent(block -> write(key, block, ttl(config)));
+        if (fetched.isPresent()) {
+            write(key, fetched.get(), ttl(config));
+        } else {
+            markFailed(key);
+        }
         return fetched;
+    }
+
+    private boolean failedRecently(String key) {
+        try {
+            return Boolean.TRUE.equals(
+                    redisTemplate.hasKey(key + ":miss"));
+        } catch (Exception e) {
+            log.debug("读取失败缓存失败 key={}: {}", key, e.getMessage());
+            return false;
+        }
+    }
+
+    private void markFailed(String key) {
+        try {
+            redisTemplate.opsForValue().set(key + ":miss", "1", MISS_TTL);
+        } catch (Exception e) {
+            log.debug("写入失败缓存失败 key={}: {}", key, e.getMessage());
+        }
     }
 
     private Map<String, DataSourceConfig> loadConfigs() {

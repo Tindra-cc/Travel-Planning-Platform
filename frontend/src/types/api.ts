@@ -203,7 +203,7 @@ export interface GuidePlanSection {
 export interface GuidePostDetail extends GuidePostItem {
   /** 图集外链，首元素与 coverUrl 同源 */
   images: string[] | null
-  /** 原文外链；为空则不显示「查看原文」 */
+  /** 原文外链；接口保留字段，前端不再展示 */
   sourceUrl: string | null
   planSections: GuidePlanSection[] | null
 }

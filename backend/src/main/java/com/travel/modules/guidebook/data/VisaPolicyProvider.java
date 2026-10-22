@@ -46,6 +46,16 @@ public class VisaPolicyProvider implements TravelDataProvider {
         if (!StringUtils.hasText(destination)) {
             return Optional.empty();
         }
+        if (DomesticDestination.isDomestic(destination)) {
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("destination", destination);
+            data.put("nationality", NATIONALITY);
+            data.put("policyType", "domestic");
+            data.put("policySummary", "国内旅行，无需办理签证；请携带有效身份证件。");
+            return Optional.of(DataBlock.ok(source(),
+                    "国内旅行，无需签证；请携带有效身份证件", data,
+                    LocalDateTime.now().format(TS)));
+        }
         try {
             List<VisaPolicy> policies = visaPolicyMapper.selectList(
                     new LambdaQueryWrapper<VisaPolicy>()

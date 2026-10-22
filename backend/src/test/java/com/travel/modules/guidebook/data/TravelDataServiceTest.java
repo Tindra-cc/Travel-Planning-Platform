@@ -148,6 +148,31 @@ class TravelDataServiceTest {
     }
 
     @Test
+    void failedSourceIsShortCachedToAvoidRefetching() {
+        when(values.get(anyString())).thenReturn(null);
+        when(redis.hasKey(anyString())).thenReturn(false);
+        when(weatherProvider.fetch(any())).thenReturn(Optional.empty());
+        when(exchangeProvider.fetch(any())).thenReturn(Optional.empty());
+
+        service.fetch(TestFixtures.intent());
+
+        verify(values).set(eq(WEATHER_KEY + ":miss"), eq("1"), eq(Duration.ofSeconds(300)));
+    }
+
+    @Test
+    void recentFailureSkipsProvider() {
+        when(values.get(anyString())).thenReturn(null);
+        when(redis.hasKey(WEATHER_KEY + ":miss")).thenReturn(true);
+        when(exchangeProvider.fetch(any())).thenReturn(Optional.empty());
+
+        TravelDataSnapshot snapshot = service.fetch(TestFixtures.intent());
+
+        verify(weatherProvider, never()).fetch(any());
+        assertThat(snapshot.unavailable())
+                .containsExactlyInAnyOrder("weather_unavailable", "exchange_unavailable");
+    }
+
+    @Test
     void redisReadFailureDoesNotBlockGeneration() {
         when(values.get(anyString())).thenThrow(new RuntimeException("redis down"));
         when(weatherProvider.fetch(any())).thenReturn(Optional.empty());

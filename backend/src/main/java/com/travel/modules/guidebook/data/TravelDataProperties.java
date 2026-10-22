@@ -15,5 +15,8 @@ public class TravelDataProperties {
     private String flightPriceUrl;
     private String hotelPriceUrl;
     private String priceToken;
+    /** SerpAPI：一个 key 覆盖 Google News / Flights / Hotels；未配置时相关源降级。 */
+    private String serpApiKey;
+    private String serpApiUrl = "https://serpapi.com/search.json";
     private int timeoutSeconds = 4;
 }

@@ -39,20 +39,23 @@ public class IntentService {
               "reply": "面向用户的中文自然语言回复，用于复述已理解的信息并追问缺失信息",
               "intent": {
                 "destination": "目的地，未知则为 null",
+                "origin": "出发城市，未知则为 null",
                 "dateWindow": { "start": "YYYY-MM-DD 或 null", "end": "YYYY-MM-DD 或 null" },
                 "party": { "adults": 成人数或 null },
                 "budget": { "amount": 数字或 null, "currency": "CNY" },
                 "preferences": ["偏好关键词"]
               },
-              "missingFields": ["仍缺失的字段名，如 destination/dateWindow/adults/budget"],
+              "missingFields": ["仍缺失的字段名，如 destination/origin/dateWindow/adults/budget"],
               "questions": [ { "questionId": "q1", "text": "澄清问题" } ]
             }
-            当 destination、dateWindow、party.adults、budget.amount 全部具备时，missingFields 与 questions 返回空数组。
+            当 destination、origin、dateWindow、party.adults、budget.amount 全部具备时，missingFields 与 questions 返回空数组。
+            origin 用于查询机票与交通耗时；用户已说明从某地出发时必须提取，不要假设默认城市。
             """;
 
     private static final Map<String, String> QUESTION_TEMPLATES = new LinkedHashMap<>();
     static {
         QUESTION_TEMPLATES.put("destination", "想去哪个目的地？");
+        QUESTION_TEMPLATES.put("origin", "从哪个城市出发？");
         QUESTION_TEMPLATES.put("dateWindow", "计划什么时候出发、玩几天？");
         QUESTION_TEMPLATES.put("adults", "一共几个人出行？");
         QUESTION_TEMPLATES.put("budget", "大概的预算范围是多少？");
@@ -63,6 +66,8 @@ public class IntentService {
     private static final Pattern WAN = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*万");
     private static final Pattern YUAN = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*(?:元|块)");
     private static final Pattern DEST = Pattern.compile("(?:去|到|前往)\\s*([\\u4e00-\\u9fa5]{2,10}?)(?=[，,。.；;！!、\\s]|$)");
+    private static final Pattern ORIGIN = Pattern.compile(
+            "(?:从|由)\\s*([\\u4e00-\\u9fa5]{2,8}?)\\s*(?:出发|起飞|乘坐|坐|飞)");
     private static final Pattern DAYS = Pattern.compile("(\\d+)\\s*天");
     private static final String NEXT_MONTH = "下个月";
 
@@ -147,6 +152,10 @@ public class IntentService {
         if (dest.find()) {
             intent.setDestination(dest.group(1));
         }
+        Matcher origin = ORIGIN.matcher(text);
+        if (origin.find()) {
+            intent.setOrigin(origin.group(1));
+        }
         Integer adults = extractPeople(text);
         if (adults != null) {
             intent.setParty(new IntentDto.Party());
@@ -159,6 +168,9 @@ public class IntentService {
         List<PendingQuestion> questions = new ArrayList<>();
         if (!StringUtils.hasText(intent.getDestination())) {
             missing.add("destination");
+        }
+        if (!StringUtils.hasText(intent.getOrigin())) {
+            missing.add("origin");
         }
         if (intent.getDateWindow() == null) {
             missing.add("dateWindow");

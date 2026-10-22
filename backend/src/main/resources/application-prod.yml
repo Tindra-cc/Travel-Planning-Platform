@@ -88,6 +88,9 @@ app:
     flight-price-url: ${FLIGHT_PRICE_URL:}
     hotel-price-url: ${HOTEL_PRICE_URL:}
     price-token: ${PRICE_SOURCE_TOKEN:}
+    # SerpAPI：一个 key 覆盖 Google News / Flights / Hotels；留空则对应源标记 unavailable
+    serp-api-key: ${SERPAPI_KEY:}
+    serp-api-url: ${SERPAPI_URL:https://serpapi.com/search.json}
     timeout-seconds: 4
   trip-companion:
     scheduling-enabled: ${TRIP_COMPANION_SCHEDULING:true}

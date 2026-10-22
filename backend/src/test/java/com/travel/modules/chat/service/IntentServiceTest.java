@@ -25,7 +25,7 @@ import com.travel.modules.chat.dto.IntentResult;
 @ExtendWith(MockitoExtension.class)
 class IntentServiceTest {
 
-    private static final String FULL_TEXT = "我想去成都，玩3天，2个人，预算1万，下个月出发";
+    private static final String FULL_TEXT = "我想从北京出发去成都，玩3天，2个人，预算1万，下个月出发";
 
     @Mock
     private AiClient aiClient;
@@ -44,6 +44,7 @@ class IntentServiceTest {
         IntentResult result = service.analyze(List.of(AiMessage.user(FULL_TEXT)));
 
         assertThat(result.getIntent().getDestination()).isEqualTo("成都");
+        assertThat(result.getIntent().getOrigin()).isEqualTo("北京");
         assertThat(result.getIntent().getParty().getAdults()).isEqualTo(2);
         assertThat(result.getIntent().getBudget().getAmount())
                 .isEqualByComparingTo(new BigDecimal("10000"));
@@ -61,6 +62,14 @@ class IntentServiceTest {
         IntentResult result = service.analyze(List.of(AiMessage.user("我们两个人去成都")));
 
         assertThat(result.getIntent().getParty().getAdults()).isEqualTo(2);
+    }
+
+    @Test
+    void fallbackParsesOrigin() {
+        IntentResult result = service.analyze(List.of(AiMessage.user("从上海出发，去成都，玩两天")));
+
+        assertThat(result.getIntent().getOrigin()).isEqualTo("上海");
+        assertThat(result.getIntent().getDestination()).isEqualTo("成都");
     }
 
     @Test
@@ -84,10 +93,10 @@ class IntentServiceTest {
         IntentResult result = service.analyze(List.of(AiMessage.user("帮我规划一下")));
 
         assertThat(result.getMissingFields())
-                .containsExactly("destination", "dateWindow", "adults", "budget");
+                .containsExactly("destination", "origin", "dateWindow", "adults", "budget");
         assertThat(result.getQuestions()).extracting("questionId")
-                .containsExactly("q1", "q2", "q3", "q4");
-        assertThat(result.getReply()).contains("请补充");
+                .containsExactly("q1", "q2", "q3", "q4", "q5");
+        assertThat(result.getReply()).contains("请补充", "从哪个城市出发");
     }
 
     @Test
