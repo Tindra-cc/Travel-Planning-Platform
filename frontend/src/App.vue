@@ -12,6 +12,9 @@ const router = useRouter()
 // 菜单高亮按路径首段取：攻略详情页 /discover/12 也要让「推荐」保持选中
 const activeMenu = computed(() => `/${route.path.split('/')[1] ?? ''}`)
 
+// 营销页自带独立导航，隐藏应用外壳避免双层导航
+const isBare = computed(() => route.meta.bare === true)
+
 // 递增后 router-view 以新 key 重新挂载当前视图，实现“再次跳转即刷新”
 const viewKey = ref(0)
 
@@ -48,7 +51,7 @@ onMounted(async () => {
 
 <template>
   <div class="app">
-    <header class="app-nav">
+    <header v-if="!isBare" class="app-nav">
       <div class="nav-inner">
         <div class="brand" @click="goHome">
           <span class="brand-mark">✈</span>
@@ -104,7 +107,7 @@ onMounted(async () => {
       </div>
     </header>
 
-    <main class="app-main">
+    <main class="app-main" :class="{ 'app-main--bare': isBare }">
       <router-view :key="`${route.fullPath}#${viewKey}`" />
     </main>
   </div>
@@ -197,6 +200,10 @@ onMounted(async () => {
   max-width: 1200px;
   margin: 0 auto;
   padding: var(--space-6);
+}
+.app-main--bare {
+  max-width: none;
+  padding: 0;
 }
 
 @media (max-width: 720px) {
