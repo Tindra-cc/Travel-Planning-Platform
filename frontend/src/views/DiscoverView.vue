@@ -117,8 +117,9 @@ async function load(targetPage: number, append: boolean) {
   try {
     const res = await recommendGuides(targetPage, PAGE_SIZE)
     items.value = append ? [...items.value, ...res.list] : res.list
-    total.value = res.total
-    page.value = res.page
+    // 后端 Long 统一序列化为字符串，分页字段必须转回数字
+    total.value = Number(res.total)
+    page.value = Number(res.page)
   } catch {
     // 失败提示由 axios 拦截器统一处理，这里保留已加载内容
   } finally {
