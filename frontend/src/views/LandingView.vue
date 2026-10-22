@@ -415,8 +415,10 @@ onBeforeUnmount(() => observer?.disconnect())
   max-width: 100%;
 }
 .lp-page a {
-  color: inherit;
   text-decoration: none;
+}
+.lp-page a:not(.a2-btn) {
+  color: inherit;
 }
 
 .hm-wrap {
