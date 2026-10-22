@@ -70,25 +70,53 @@
         </div>
       </section>
 
-      <section v-if="sections.length" class="plan">
-        <h2 class="plan-head">规划详情</h2>
-        <div class="sections">
-          <div v-for="sec in sections" :key="sec.type + sec.title" class="section">
-            <div class="section-head">
-              <span class="section-ico">
-                <el-icon><component :is="iconOf(sec.type)" /></el-icon>
-              </span>
-              <span class="section-title">{{ sec.title }}</span>
-            </div>
-            <ul class="items">
-              <li v-for="(it, i) in sec.items" :key="i" class="item">
-                <div class="item-main">
-                  <span class="item-name">{{ it.name }}</span>
-                  <span v-if="it.price" class="item-price">{{ it.price }}</span>
+      <section v-if="dayGroups.length || sharedSections.length" class="plan">
+        <div class="plan-head">
+          <h2>规划详情</h2>
+          <span v-if="dayGroups.length" class="plan-sub">{{ dayGroups.length }} 天路线</span>
+        </div>
+
+        <div v-if="dayGroups.length" class="day-list">
+          <article v-for="day in dayGroups" :key="day.day" class="day-card">
+            <header class="day-head">
+              <span class="day-num">Day {{ day.day }}</span>
+              <span class="day-sub">第 {{ day.day }} 天</span>
+            </header>
+            <ul class="day-items">
+              <li v-for="(it, i) in day.items" :key="i" class="day-item">
+                <span class="day-ico">{{ kindIcon(it.kind) }}</span>
+                <div class="day-item-body">
+                  <div class="item-main">
+                    <span class="item-name">{{ it.name }}</span>
+                    <span v-if="it.price" class="item-price">{{ it.price }}</span>
+                  </div>
+                  <p v-if="it.note" class="item-note">{{ it.note }}</p>
                 </div>
-                <p v-if="it.note" class="item-note">{{ it.note }}</p>
               </li>
             </ul>
+          </article>
+        </div>
+
+        <div v-if="sharedSections.length" class="shared">
+          <h3>全程参考</h3>
+          <div class="sections">
+            <div v-for="sec in sharedSections" :key="sec.type + sec.title" class="section">
+              <div class="section-head">
+                <span class="section-ico">
+                  <el-icon><component :is="iconOf(sec.type)" /></el-icon>
+                </span>
+                <span class="section-title">{{ sec.title }}</span>
+              </div>
+              <ul class="items">
+                <li v-for="(it, i) in sec.items" :key="i" class="item">
+                  <div class="item-main">
+                    <span class="item-name">{{ it.name }}</span>
+                    <span v-if="it.price" class="item-price">{{ it.price }}</span>
+                  </div>
+                  <p v-if="it.note" class="item-note">{{ it.note }}</p>
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
       </section>
@@ -133,6 +161,68 @@ const failedThumbs = ref(new Set<string>())
 const images = computed(() => (detail.value?.images ?? []).filter(Boolean))
 const sections = computed(() => (detail.value?.planSections ?? []).filter((s) => s.items?.length))
 const currentImage = computed(() => images.value[activeIndex.value] ?? null)
+
+interface DayItem {
+  name: string | null
+  note: string | null
+  price: string | null
+  kind: string
+}
+interface DayGroup {
+  day: number
+  items: DayItem[]
+}
+
+const DAY_TITLE = /^(?:day|第)?\s*(\d+)\s*(?:天)?$/i
+const KIND_ICONS: Record<string, string> = {
+  spot: '📍',
+  food: '🍜',
+  transport: '🚇',
+  stay: '🏨',
+  free: '🌿'
+}
+
+function kindIcon(kind: string) {
+  return KIND_ICONS[kind] ?? '📍'
+}
+
+// 达人发布的攻略已按「Day N」分节；历史演示数据是住宿/吃饭/景点分类，这里按天数自动排成逐日路线
+const dayGroups = computed<DayGroup[]>(() => {
+  const keyed = sections.value
+    .map((section) => ({ section, match: section.title.trim().match(DAY_TITLE) }))
+    .filter((entry) => entry.match)
+    .map((entry) => ({
+      day: Number(entry.match![1]),
+      items: entry.section.items.map((item) => ({ ...item, kind: entry.section.type }))
+    }))
+    .sort((a, b) => a.day - b.day)
+  if (keyed.length) return keyed
+
+  const spots = sections.value.find((s) => s.type === 'spot')?.items ?? []
+  const foods = sections.value.find((s) => s.type === 'food')?.items ?? []
+  if (!spots.length && !foods.length) return []
+
+  const requested = detail.value?.durationDays ?? 0
+  const count = Math.min(Math.max(requested || spots.length || foods.length, 1), 10)
+  const groups: DayGroup[] = Array.from({ length: count }, (_, i) => ({ day: i + 1, items: [] }))
+  spots.forEach((item, i) => groups[i % count]?.items.push({ ...item, kind: 'spot' }))
+  foods.forEach((item, i) => groups[i % count]?.items.push({ ...item, kind: 'food' }))
+  for (const group of groups) {
+    if (!group.items.length) {
+      group.items.push({
+        name: '自由活动',
+        note: `留白半天，在${detail.value?.destination ?? '当地'}慢慢逛，按体力随时调整。`,
+        price: null,
+        kind: 'free'
+      })
+    }
+  }
+  return groups
+})
+
+const sharedSections = computed(() =>
+  sections.value.filter((section) => !DAY_TITLE.test(section.title.trim()))
+)
 
 function iconOf(type: string) {
   return SECTION_ICONS[type] ?? DEFAULT_ICON
@@ -389,11 +479,94 @@ watch(() => route.params.postId, load, { immediate: true })
   padding: var(--space-5);
 }
 .plan-head {
-  margin: 0 0 var(--space-4);
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.plan-head h2 {
+  margin: 0;
   font-size: 17px;
   font-weight: 700;
   color: var(--text-1);
 }
+.plan-sub {
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+.day-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.day-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  background: linear-gradient(180deg, var(--brand-050) 0, transparent 88px);
+}
+.day-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.day-num {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--brand-600);
+}
+.day-sub {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.day-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.day-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--border);
+}
+.day-item:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+.day-ico {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  font-size: 15px;
+  flex-shrink: 0;
+}
+.day-item-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.shared {
+  margin-top: var(--space-5);
+}
+.shared h3 {
+  margin: 0 0 var(--space-3);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
 .sections {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));

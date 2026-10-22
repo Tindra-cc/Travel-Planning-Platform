@@ -136,6 +136,31 @@ public class ComparisonService {
                 comparison.getStatus(), comparison.getErrorMessage(), items);
     }
 
+    /**
+     * 最近一次对比任务。退出对比页后再点「生成对比方案」时直接恢复上一次结果，
+     * 避免重复扣配额、重复等待生成。
+     *
+     * @param baseGuidebookId 基准攻略 ID
+     * @return 最近一次对比详情；从未生成过时返回 null
+     */
+    public ComparisonDetailResponse latest(Long baseGuidebookId) {
+        if (baseGuidebookId == null) {
+            throw new BizException(ResultCode.PARAM_ERROR, "baseGuidebookId 不能为空");
+        }
+        Guidebook base = guidebookService.requireOwned(baseGuidebookId);
+        Long userId = UserContext.getUserId();
+        GuidebookComparison comparison = comparisonMapper.selectOne(
+                new LambdaQueryWrapper<GuidebookComparison>()
+                        .eq(GuidebookComparison::getUserId, userId)
+                        .eq(GuidebookComparison::getBaseGuidebookId, base.getId())
+                        .orderByDesc(GuidebookComparison::getId)
+                        .last("LIMIT 1"));
+        if (comparison == null) {
+            return null;
+        }
+        return detail(comparison.getId());
+    }
+
     private ComparisonDetailResponse.VariantDetail toDetail(Guidebook guidebook) {
         var budget = guidebook.getBudgetBreakdown() == null
                 ? null : guidebook.getBudgetBreakdown().getTotal();

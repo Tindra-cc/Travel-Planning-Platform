@@ -19,6 +19,8 @@ public class User extends BaseEntity {
     private String accountType;
     private String passwordHash;
     private String nickname;
+    /** 预置 emoji 或图片 URL */
+    private String avatar;
     /** L1 / L2 / L3 */
     private String userLevel;
     /** 1 正常 0 禁用 */

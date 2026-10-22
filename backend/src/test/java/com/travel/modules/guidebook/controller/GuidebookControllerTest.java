@@ -29,6 +29,7 @@ import com.travel.modules.guidebook.dto.GenerateGuidebookRequest;
 import com.travel.modules.guidebook.dto.GenerateGuidebookResponse;
 import com.travel.modules.guidebook.dto.GuidebookDetailResponse;
 import com.travel.modules.guidebook.dto.GuidebookListItem;
+import com.travel.modules.guidebook.service.GuidebookConflictService;
 import com.travel.modules.guidebook.service.GuidebookService;
 import com.travel.support.MvcTestSupport;
 
@@ -38,11 +39,14 @@ class GuidebookControllerTest {
     @Mock
     private GuidebookService guidebookService;
 
+    @Mock
+    private GuidebookConflictService conflictService;
+
     private MockMvc mvc;
 
     @BeforeEach
     void setUp() {
-        mvc = MvcTestSupport.mockMvc(new GuidebookController(guidebookService));
+        mvc = MvcTestSupport.mockMvc(new GuidebookController(guidebookService, conflictService));
     }
 
     @Test

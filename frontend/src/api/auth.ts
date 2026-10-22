@@ -27,3 +27,7 @@ export function logout() {
 export function fetchMe() {
   return request<CurrentUser>({ url: '/auth/me', method: 'get' })
 }
+
+export function updateMe(data: { nickname: string; avatar: string | null }) {
+  return request<CurrentUser>({ url: '/auth/me', method: 'put', data })
+}

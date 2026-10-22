@@ -16,7 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * PG + pg_trgm 子串召回，按目的地/关键词排序；只召回已审核条目。
- * 检索失败不阻断生成，返回空列表由流水线标记 no_knowledge。
+ * 检索失败不阻断生成，返回空列表由模型按通用知识继续生成。
  */
 @Slf4j
 @Component

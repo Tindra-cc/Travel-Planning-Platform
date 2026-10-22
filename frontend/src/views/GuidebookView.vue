@@ -77,20 +77,40 @@
         </div>
       </template>
 
-      <!-- 生成中：WS 推送 + 轮询兜底 -->
+      <!-- 生成中：对话式逐条输出，WS 推送 + 轮询兜底 -->
       <div v-if="detail.status === 'generating'" class="generating">
-        <el-progress
-          type="dashboard"
-          :percentage="progress"
-          :width="148"
-          :stroke-width="10"
-          color="#3b82f6"
-        />
-        <div class="step-title">{{ stepLabel }}</div>
-        <el-steps :active="stepIndex" align-center finish-status="success" class="steps">
-          <el-step v-for="s in HIGH_LEVEL_STEPS" :key="s" :title="s" />
-        </el-steps>
-        <p class="generating-note">正在结合你的画像、目的地资料与实时数据生成，预计约 30 秒。</p>
+        <div class="stream-head">
+          <span class="stream-avatar">✈</span>
+          <div class="stream-head-text">
+            <strong>旅行助理</strong>
+            <span class="muted">正在为你生成攻略，约 30 秒</span>
+          </div>
+          <span class="stream-pct">{{ progress }}%</span>
+        </div>
+
+        <div class="stream-list">
+          <div
+            v-for="step in generationSteps"
+            :key="step.key"
+            :class="['stream-item', `is-${step.state}`]"
+          >
+            <span class="stream-dot">
+              <el-icon v-if="step.state === 'done'"><Check /></el-icon>
+              <span v-else-if="step.state === 'current'" class="typing-dots">
+                <i></i><i></i><i></i>
+              </span>
+            </span>
+            <div class="stream-text">
+              <span class="stream-title">{{ step.title }}</span>
+              <span v-if="step.state === 'current'" class="stream-desc">{{ stepLabel }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="stream-progress">
+          <el-progress :percentage="progress" :show-text="false" :stroke-width="6" />
+        </div>
+        <p class="generating-note">可以先去做别的，生成完成后会自动刷新。</p>
       </div>
 
       <!-- 失败：可重试 -->
@@ -110,34 +130,6 @@
 
       <!-- 完成：日程 / 预算 / 贴士 / 溯源 -->
       <div v-else class="draft">
-        <el-alert
-          v-if="visibleDegradationReasons.length"
-          type="warning"
-          :closable="false"
-          show-icon
-          title="部分内容为模板生成"
-          :description="degradationText"
-          class="degraded-alert"
-        />
-
-        <div v-if="travelBlocks.length" class="freshness-panel">
-          <div class="freshness-head">
-            <span>数据时效</span>
-            <span v-if="dataFetchedAt" class="muted">采集于 {{ dataFetchedAt }}</span>
-          </div>
-          <div class="freshness-list">
-            <el-tag
-              v-for="block in travelBlocks"
-              :key="block.source"
-              size="small"
-              effect="plain"
-              type="success"
-            >
-              {{ sourceLabel(block.source) }}：{{ block.summary || '已采集' }}
-            </el-tag>
-          </div>
-        </div>
-
         <div class="edit-toolbar">
           <template v-if="editable">
             <el-input
@@ -175,10 +167,25 @@
           :title="`存在 ${conflicts.length} 处冲突，处理后才能确认`"
         >
           <ul class="conflict-list">
-            <li v-for="(c, i) in conflicts" :key="`${c.type}-${i}`">
-              {{ c.day ? `第 ${c.day} 天 · ` : '' }}{{ c.message }}
+            <li v-for="(c, i) in conflicts" :key="`${c.type}-${i}`" class="conflict-row">
+              <span>{{ c.day ? `第 ${c.day} 天 · ` : '' }}{{ c.message }}</span>
+              <el-button
+                v-if="editable"
+                size="small"
+                text
+                type="primary"
+                @click="focusConflict(c)"
+              >
+                {{ conflictActionLabel(c) }}
+              </el-button>
             </li>
           </ul>
+          <div v-if="editable" class="conflict-actions">
+            <el-button size="small" type="warning" plain :loading="repairing" @click="onRepair">
+              一键修复
+            </el-button>
+            <span class="muted">自动顺延时间并压缩预算；营业时间类冲突需手动调整</span>
+          </div>
         </el-alert>
 
         <el-tabs v-model="activeDay">
@@ -193,6 +200,19 @@
               <span class="muted">拖动节点可调整同日顺序；跨天请用「移到」菜单。</span>
             </div>
 
+            <div v-if="dayFreshness(day).length" class="day-freshness">
+              <span class="day-freshness-label">数据时效</span>
+              <el-tag
+                v-for="item in dayFreshness(day)"
+                :key="item"
+                size="small"
+                effect="plain"
+                type="success"
+              >
+                {{ item }}
+              </el-tag>
+            </div>
+
             <div v-if="day.nodes.length" class="node-list">
               <VueDraggable
                 v-model="day.nodes"
@@ -202,10 +222,14 @@
                 @end="onDragEnd(day, $event)"
               >
                 <div
-                  v-for="node in day.nodes"
+                  v-for="(node, nodeIndex) in day.nodes"
                   :key="node.nodeId ?? node.place?.name ?? 'node'"
                   class="node-item"
                 >
+                  <div v-if="nodeIndex > 0" class="transit-row">
+                    <span class="transit-line"></span>
+                    <span class="transit-chip">{{ transitLabel(day, nodeIndex) }}</span>
+                  </div>
                   <span v-if="editable" class="drag-handle" title="拖动排序">⠿</span>
                   <div class="node-card">
                     <div class="node-head">
@@ -215,7 +239,7 @@
                         <span class="node-time">{{ timeRange(node) }}</span>
                       </div>
                     </div>
-                    <p v-if="node.note" class="node-note">{{ node.note }}</p>
+                    <p v-if="cleanNote(node.note)" class="node-note">{{ cleanNote(node.note) }}</p>
                     <div v-if="node.openingHours" class="node-source">
                       营业时间：{{ node.openingHours }}
                       <span v-if="node.openingHoursSource">
@@ -223,18 +247,32 @@
                       </span>
                     </div>
                     <div v-if="visibleCitations(node.citations).length" class="node-citations">
-                      <component
-                        :is="citation.sourceUrl ? 'a' : 'span'"
+                      <el-popover
                         v-for="(citation, i) in visibleCitations(node.citations)"
                         :key="`${citation.code ?? 'general'}-${i}`"
-                        :href="citation.sourceUrl ?? undefined"
-                        :target="citation.sourceUrl ? '_blank' : undefined"
-                        :rel="citation.sourceUrl ? 'noopener noreferrer' : undefined"
-                        class="citation"
-                        :title="citation.summary ?? undefined"
+                        trigger="click"
+                        :width="300"
+                        placement="top"
                       >
-                        {{ citationLabel(citation) }}
-                      </component>
+                        <template #reference>
+                          <button type="button" class="citation">
+                            {{ citationLabel(citation) }}
+                          </button>
+                        </template>
+                        <div class="citation-pop">
+                          <strong>{{ citation.title || citation.sourceName || '参考资料' }}</strong>
+                          <p v-if="citation.summary">{{ citation.summary }}</p>
+                          <p v-else class="muted">暂无更多摘要</p>
+                          <a
+                            v-if="citation.sourceUrl"
+                            :href="citation.sourceUrl"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            查看原文 ↗
+                          </a>
+                        </div>
+                      </el-popover>
                     </div>
                     <div v-if="node.resource" class="node-resource">
                       <div class="resource-head">
@@ -381,9 +419,18 @@
         </el-form-item>
         <el-form-item label="时间">
           <div class="time-row">
-            <el-input v-model="nodeForm.start" placeholder="09:00" maxlength="5" />
+            <el-select
+              v-model="nodeForm.start"
+              placeholder="开始时间"
+              filterable
+              @change="onStartChange"
+            >
+              <el-option v-for="t in startOptions" :key="t" :label="t" :value="t" />
+            </el-select>
             <span class="time-sep">至</span>
-            <el-input v-model="nodeForm.end" placeholder="11:00" maxlength="5" />
+            <el-select v-model="nodeForm.end" placeholder="结束时间" filterable>
+              <el-option v-for="t in endOptions" :key="t" :label="t" :value="t" />
+            </el-select>
           </div>
         </el-form-item>
         <el-form-item label="备注">
@@ -500,15 +547,31 @@
       </div>
     </el-drawer>
 
-    <el-dialog v-model="compareDialog" title="生成对比方案" width="440px">
-      <p class="muted compare-hint">
-        一次对比计为一次生成；三套方案顺序生成，通常需要 1-3 分钟。
-      </p>
-      <el-checkbox-group v-model="compareVariants">
-        <el-checkbox value="budget">省钱优先</el-checkbox>
-        <el-checkbox value="balanced">均衡方案</el-checkbox>
-        <el-checkbox value="luxury">品质优先</el-checkbox>
-      </el-checkbox-group>
+    <el-dialog v-model="compareDialog" title="对比方案" width="440px">
+      <div v-loading="compareChecking" class="compare-dialog-body">
+        <div v-if="latestComparison" class="compare-resume">
+          <div class="compare-resume-head">
+            <strong>上次的对比方案</strong>
+            <el-tag size="small" :type="compareStatusType(latestComparison.status)">
+              {{ compareStatusLabel(latestComparison.status) }}
+            </el-tag>
+          </div>
+          <p class="muted">继续查看不会重新生成，也不会重复扣配额。</p>
+          <el-button type="primary" size="small" @click="resumeComparison">
+            继续查看上次结果
+          </el-button>
+          <el-divider>或重新生成一套</el-divider>
+        </div>
+
+        <p class="muted compare-hint">
+          一次对比计为一次生成；三套方案顺序生成，通常需要 1-3 分钟。
+        </p>
+        <el-checkbox-group v-model="compareVariants">
+          <el-checkbox value="budget">省钱优先</el-checkbox>
+          <el-checkbox value="balanced">均衡方案</el-checkbox>
+          <el-checkbox value="luxury">品质优先</el-checkbox>
+        </el-checkbox-group>
+      </div>
       <template #footer>
         <el-button @click="compareDialog = false">取消</el-button>
         <el-button
@@ -517,7 +580,7 @@
           :disabled="compareVariants.length < 2"
           @click="onStartCompare"
         >
-          生成
+          {{ latestComparison ? '重新生成' : '生成' }}
         </el-button>
       </template>
     </el-dialog>
@@ -595,6 +658,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Check } from '@element-plus/icons-vue'
 import { VueDraggable } from 'vue-draggable-plus'
 import * as compareApi from '@/api/compare'
 import * as guidebookApi from '@/api/guidebook'
@@ -606,6 +670,7 @@ import { openGuidebookSocket, type GuidebookProgressEvent } from '@/utils/guideb
 import type {
   BudgetBreakdown,
   Citation,
+  ComparisonDetail,
   GuidebookDetail,
   GuidebookListItem,
   GuidebookNode,
@@ -658,25 +723,20 @@ const CHANGE_TYPE_LABELS: Record<string, string> = {
   restore: '版本回溯',
   companion: '行程调整'
 }
-const DEGRADE_LABELS: Record<string, string> = {
-  no_knowledge: '未检索到目的地资料',
-  weather_unavailable: '天气数据不可用',
-  exchange_unavailable: '汇率数据不可用',
-  local_news_unavailable: '当地动态不可用',
-  visa_unavailable: '签证政策暂无资料',
-  flight_price_unavailable: '机票价格时效未知',
-  hotel_price_unavailable: '酒店价格时效未知',
-  opening_hours_enrichment_failed: '营业时间补充失败',
-  model_fallback: 'AI 模型不可用，已使用模板',
-  json_repaired: 'AI 输出经过一次修复',
-  validation_fallback: '行程校验失败，已使用模板',
-  validation_repaired: '行程结构经过自动修复',
-  day_count_mismatch: '生成天数与请求不一致',
-  data_unavailable: '部分实时数据缺失'
-}
 const EDITABLE_STATUSES = ['draft', 'editing']
 const SHAREABLE_STATUSES = ['confirmed', 'executing', 'completed']
 const TIME_PATTERN = /^\d{2}:\d{2}$/
+const TIME_SLOTS = buildTimeSlots()
+
+function buildTimeSlots() {
+  const slots: string[] = []
+  for (let minutes = 6 * 60; minutes <= 23 * 60 + 30; minutes += 30) {
+    const hh = String(Math.floor(minutes / 60)).padStart(2, '0')
+    const mm = String(minutes % 60).padStart(2, '0')
+    slots.push(`${hh}:${mm}`)
+  }
+  return slots
+}
 const RESOURCE_TYPE_LABELS: Record<string, string> = {
   flight: '机票',
   hotel: '酒店',
@@ -728,6 +788,7 @@ const instruction = ref('')
 const adjusting = ref(false)
 const confirming = ref(false)
 const conflicts = ref<NodeConflict[]>([])
+const repairing = ref(false)
 
 const nodeDialog = ref(false)
 const nodeMode = ref<'create' | 'edit'>('create')
@@ -743,6 +804,8 @@ const restoringVersion = ref<number | null>(null)
 const compareDialog = ref(false)
 const compareVariants = ref<string[]>(['budget', 'balanced', 'luxury'])
 const compareStarting = ref(false)
+const compareChecking = ref(false)
+const latestComparison = ref<ComparisonDetail | null>(null)
 
 const offlineDialog = ref(false)
 const offlineForm = reactive({ format: 'pdf' as OfflinePackFormat, includeMaps: true })
@@ -789,34 +852,150 @@ const stepIndex = computed(() => {
     || step === 'traceability' || step === 'persist' || step === 'completed') return 5
   return 0
 })
-// 数据源缺失由演示数据兜底，不再作为「降级」提示打扰用户
-const DATA_SOURCE_REASONS = new Set([
-  'weather_unavailable', 'exchange_unavailable', 'local_news_unavailable',
-  'visa_unavailable', 'flight_price_unavailable', 'hotel_price_unavailable',
-  'data_unavailable'
-])
-const visibleDegradationReasons = computed(() =>
-  (detail.value?.degradationReasons ?? []).filter((r) => !DATA_SOURCE_REASONS.has(r)),
-)
-const degradationText = computed(() =>
-  visibleDegradationReasons.value.map((r) => DEGRADE_LABELS[r] ?? r).join('；'),
-)
-const travelBlocks = computed(() =>
-  (detail.value?.travelData?.blocks ?? []).filter((b) => b.status === 'ok'),
-)
+const generationSteps = computed(() => {
+  const active = stepIndex.value
+  return HIGH_LEVEL_STEPS.map((title, i) => ({
+    key: title,
+    title,
+    state: i < active ? 'done' : i === active ? 'current' : 'pending'
+  }))
+})
 const dataFetchedAt = computed(
   () => detail.value?.travelDataAt ?? detail.value?.travelData?.fetchedAt ?? '',
 )
-const SOURCE_LABELS: Record<string, string> = {
-  weather: '天气',
-  exchange: '汇率',
-  local_news: '当地动态',
-  visa: '签证',
-  flight_price: '机票',
-  hotel_price: '酒店',
+
+const startOptions = computed(() =>
+  uniqueTimes([...TIME_SLOTS, nodeForm.start])
+)
+const endOptions = computed(() =>
+  uniqueTimes([
+    ...TIME_SLOTS.filter((t) => !nodeForm.start || t > nodeForm.start),
+    nodeForm.end
+  ])
+)
+
+function uniqueTimes(values: Array<string | null>) {
+  return [...new Set(values.filter((value): value is string => !!value))].sort()
 }
-function sourceLabel(source: string) {
-  return SOURCE_LABELS[source] ?? source
+
+function onStartChange() {
+  if (nodeForm.end && nodeForm.start && nodeForm.end <= nodeForm.start) {
+    nodeForm.end = TIME_SLOTS.find((t) => t > nodeForm.start) ?? ''
+  }
+}
+
+function toMinutes(value: string | null | undefined) {
+  if (!value || !TIME_PATTERN.test(value)) return null
+  const [h = 0, m = 0] = value.split(':').map(Number)
+  return h * 60 + m
+}
+
+const EARTH_RADIUS_KM = 6371
+function haversineKm(from: GuidebookNode, to: GuidebookNode) {
+  const a = from.place
+  const b = to.place
+  if (a?.lat == null || a.lng == null || b?.lat == null || b.lng == null) return null
+  const rad = (deg: number) => (deg * Math.PI) / 180
+  const dLat = rad(b.lat - a.lat)
+  const dLng = rad(b.lng - a.lng)
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2
+  return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(h))
+}
+
+// 相邻节点之间给出交通方式建议：有坐标按距离判断，没坐标按时间间隔兜底
+function transitLabel(day: EditableDay, index: number) {
+  const from = day.nodes[index - 1]
+  const to = day.nodes[index]
+  if (!from || !to) return ''
+  const distance = haversineKm(from, to)
+  const gap = (() => {
+    const arrive = toMinutes(to.timeSlot?.start)
+    const leave = toMinutes(from.timeSlot?.end)
+    return arrive != null && leave != null ? arrive - leave : null
+  })()
+
+  let mode: string
+  if (distance != null) {
+    if (distance < 1.2) mode = '步行'
+    else if (distance < 8) mode = '打车'
+    else mode = '公共交通'
+  } else if (gap != null && gap <= 20) {
+    mode = '步行或打车'
+  } else {
+    mode = '公共交通'
+  }
+
+  const parts = [`${mode}前往下一站`]
+  if (distance != null) parts.push(`约 ${distance.toFixed(1)} 公里`)
+  if (gap != null && gap > 0) parts.push(`预留 ${gap} 分钟`)
+  else if (gap != null && gap <= 0) parts.push('时间衔接较紧')
+  return parts.join(' · ')
+}
+
+function formatFreshness(value: string) {
+  return value.replace('T', ' ').slice(0, 16)
+}
+
+function dayFreshness(day: EditableDay) {
+  const values = day.nodes
+    .map((node) => node.dataFreshness)
+    .filter((value): value is string => !!value)
+  if (!values.length && dataFetchedAt.value) values.push(dataFetchedAt.value)
+  return [...new Set(values.map(formatFreshness))]
+}
+
+// 正文里的 [K1] 只作为引用标记，按钮已经承担跳转，不再重复展示
+function cleanNote(note: string | null | undefined) {
+  return (note ?? '')
+    .replace(/\[K\d+\]/g, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim()
+}
+
+function conflictActionLabel(conflict: NodeConflict) {
+  if (conflict.type === 'budget_exceeded') return '一键压缩'
+  if (conflict.nodeIds?.length) return '去调整'
+  return '查看'
+}
+
+function focusConflict(conflict: NodeConflict) {
+  if (conflict.type === 'budget_exceeded') {
+    void onRepair()
+    return
+  }
+  const nodeId = conflict.nodeIds?.[0]
+  if (!nodeId) return
+  for (const day of days.value) {
+    const node = day.nodes.find((item) => item.nodeId === nodeId)
+    if (node) {
+      activeDay.value = String(day.day)
+      openEdit(day.day, node)
+      return
+    }
+  }
+  ElMessage.info('该冲突需要先调整节点时间')
+}
+
+async function onRepair() {
+  if (!guidebookId.value) return
+  repairing.value = true
+  try {
+    const res = await guidebookApi.repairGuidebookConflicts(guidebookId.value)
+    const remaining = res.conflicts ?? []
+    conflicts.value = remaining
+    if (remaining.length) {
+      ElMessage.warning(`已自动顺延时间，仍有 ${remaining.length} 处冲突需要手动调整`)
+    } else {
+      ElMessage.success('冲突已修复')
+    }
+    await load()
+  } catch {
+    // 拦截器已提示
+  } finally {
+    repairing.value = false
+  }
 }
 
 function statusLabel(status: string) {
@@ -938,7 +1117,7 @@ async function onSearchResources() {
       type: resourceForm.type,
       destination,
       page: 1,
-      pageSize: 10
+      pageSize: 20
     })
     resourceResults.value = res.list ?? []
   } catch {
@@ -1161,8 +1340,8 @@ function openCreate(day: number) {
   nodeContext.lng = null
   nodeForm.type = 'activity'
   nodeForm.name = ''
-  nodeForm.start = ''
-  nodeForm.end = ''
+  nodeForm.start = '09:00'
+  nodeForm.end = '10:00'
   nodeForm.note = ''
   nodeDialog.value = true
 }
@@ -1341,9 +1520,45 @@ async function onExport(format: 'markdown' | 'html') {
   }
 }
 
-function openCompare() {
+const COMPARE_STATUS_LABELS: Record<string, string> = {
+  processing: '生成中',
+  completed: '已完成',
+  partial: '部分完成',
+  failed: '生成失败'
+}
+
+function compareStatusLabel(status: string) {
+  return COMPARE_STATUS_LABELS[status] ?? status
+}
+
+function compareStatusType(status: string): 'success' | 'warning' | 'info' | 'danger' {
+  if (status === 'completed') return 'success'
+  if (status === 'partial') return 'warning'
+  if (status === 'failed') return 'danger'
+  return 'info'
+}
+
+async function openCompare() {
   compareVariants.value = ['budget', 'balanced', 'luxury']
+  latestComparison.value = null
   compareDialog.value = true
+  if (!guidebookId.value) return
+  // 先查最近一次对比，退出过对比页的用户可以直接恢复，不用重跑生成
+  compareChecking.value = true
+  try {
+    latestComparison.value = await compareApi.getLatestComparison(guidebookId.value)
+  } catch {
+    latestComparison.value = null
+  } finally {
+    compareChecking.value = false
+  }
+}
+
+function resumeComparison() {
+  if (!latestComparison.value) return
+  const id = latestComparison.value.comparisonId
+  compareDialog.value = false
+  router.push(`/guidebook/compare/${id}`)
 }
 
 function openCompanion() {
@@ -1510,6 +1725,8 @@ function reset() {
   resourceDialog.value = false
   resourceResults.value = []
   linkChecks.value = {}
+  latestComparison.value = null
+  compareDialog.value = false
 }
 
 onMounted(async () => {
@@ -1646,24 +1863,126 @@ onBeforeUnmount(reset)
   color: var(--text-2);
 }
 
+/* 生成中：仿对话流的逐条状态输出 */
 .generating {
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: var(--space-4);
-  padding: 40px var(--space-4);
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4);
 }
-.step-title {
+.stream-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+.stream-avatar {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--grad-brand);
+  color: #fff;
   font-size: 16px;
-  font-weight: 600;
+  flex-shrink: 0;
+}
+.stream-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.stream-head-text strong {
+  font-size: 15px;
   color: var(--text-1);
 }
-.steps {
-  width: 100%;
-  max-width: 760px;
+.stream-head-text .muted {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.stream-pct {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brand-600);
+}
+
+.stream-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.stream-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  font-size: 14px;
+  color: var(--text-3);
+  transition: color 0.2s;
+}
+.stream-item.is-current,
+.stream-item.is-done {
+  color: var(--text-1);
+}
+.stream-dot {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--brand-050);
+  color: var(--text-3);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.stream-item.is-done .stream-dot {
+  background: var(--brand-500);
+  color: #fff;
+}
+.stream-item.is-current .stream-dot {
+  background: var(--brand-100, #e0ebff);
+}
+.typing-dots {
+  display: inline-flex;
+  gap: 2px;
+}
+.typing-dots i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--brand-500);
+  animation: typing-bounce 1s infinite ease-in-out;
+}
+.typing-dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.typing-dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-3px); opacity: 1; }
+}
+.stream-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 1px;
+}
+.stream-desc {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.stream-progress {
+  padding: var(--space-1) 0;
 }
 .generating-note {
   margin: 0;
+  text-align: center;
   font-size: 13px;
   color: var(--text-3);
 }
@@ -1675,42 +1994,69 @@ onBeforeUnmount(reset)
   padding: var(--space-4) 0;
 }
 
-.degraded-alert,
 .conflict-alert {
   margin-bottom: var(--space-4);
 }
-
-.freshness-panel {
-  margin-bottom: var(--space-4);
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-}
-.freshness-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--space-2);
-  font-size: 13px;
-  font-weight: 600;
-}
-.freshness-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-.freshness-list :deep(.el-tag) {
-  height: auto;
-  padding: 2px 8px;
-  line-height: 1.5;
-  white-space: normal;
-}
 .conflict-list {
   margin: var(--space-2) 0 0;
-  padding-left: 18px;
+  padding: 0;
+  list-style: none;
   font-size: 13px;
   line-height: 1.7;
+}
+.conflict-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.conflict-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  flex-wrap: wrap;
+}
+.conflict-actions .muted {
+  font-size: 12px;
+}
+
+.day-freshness {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.day-freshness-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+
+.transit-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 2px 0 2px 40px;
+}
+.transit-line {
+  width: 2px;
+  height: 18px;
+  border-radius: 2px;
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--border) 0 4px,
+    transparent 4px 8px
+  );
+}
+.transit-chip {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--brand-050);
+  color: var(--brand-600);
+  font-size: 12px;
 }
 
 .edit-toolbar {
@@ -1740,6 +2086,7 @@ onBeforeUnmount(reset)
 .node-item {
   display: flex;
   align-items: stretch;
+  flex-wrap: wrap;
   gap: var(--space-2);
 }
 .drag-handle {
@@ -1796,11 +2143,38 @@ onBeforeUnmount(reset)
   margin-top: var(--space-2);
 }
 .citation {
+  padding: 1px 8px;
+  border: 1px solid var(--brand-100, #dbe7ff);
+  border-radius: 999px;
+  background: var(--brand-050);
+  color: var(--brand-600);
   font-size: 12px;
-  color: var(--primary, #3b82f6);
-  text-decoration: none;
+  line-height: 1.6;
+  cursor: pointer;
+  transition: background 0.15s;
 }
 .citation:hover {
+  background: var(--brand-100, #dbe7ff);
+}
+.citation-pop {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.citation-pop strong {
+  color: var(--text-1);
+}
+.citation-pop p {
+  margin: 0;
+  color: var(--text-2);
+}
+.citation-pop a {
+  color: var(--brand-600);
+  text-decoration: none;
+}
+.citation-pop a:hover {
   text-decoration: underline;
 }
 
@@ -1900,6 +2274,30 @@ onBeforeUnmount(reset)
 }
 .offline-status {
   margin-top: var(--space-3);
+}
+
+.compare-dialog-body {
+  min-height: 60px;
+}
+.compare-resume {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--brand-050);
+}
+.compare-resume-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 14px;
+}
+.compare-resume :deep(.el-divider) {
+  margin: var(--space-1) 0;
+  width: 100%;
 }
 
 .time-row {

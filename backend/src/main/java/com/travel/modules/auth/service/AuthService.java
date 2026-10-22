@@ -20,6 +20,7 @@ import com.travel.modules.auth.dto.AuthResponse;
 import com.travel.modules.auth.dto.CurrentUserResponse;
 import com.travel.modules.auth.dto.LoginRequest;
 import com.travel.modules.auth.dto.RegisterRequest;
+import com.travel.modules.auth.dto.UpdateProfileRequest;
 import com.travel.modules.auth.dto.VerifyCodeRequest;
 import com.travel.modules.auth.dto.VerifyCodeResponse;
 import com.travel.modules.auth.entity.User;
@@ -145,9 +146,41 @@ public class AuthService {
             throw new BizException(ResultCode.NOT_FOUND, "用户不存在");
         }
         return new CurrentUserResponse(user.getId(), user.getAccount(), user.getAccountType(),
-                user.getNickname(), user.getUserLevel(),
+                user.getNickname(), user.getAvatar(), user.getUserLevel(),
                 user.getProfileCompleted(), user.getDailyGenerateQuota(), user.getDailyGenerateUsed(),
                 l3AccessPolicy.hasAccess(user.getId()));
+    }
+
+    /** 个人中心只开放昵称与头像，其余资料走画像接口。 */
+    public CurrentUserResponse updateProfile(UpdateProfileRequest req) {
+        User user = userMapper.selectById(UserContext.getUserId());
+        if (user == null) {
+            throw new BizException(ResultCode.NOT_FOUND, "用户不存在");
+        }
+        String nickname = req.getNickname() == null ? "" : req.getNickname().trim();
+        if (nickname.isEmpty()) {
+            throw new BizException(ResultCode.PARAM_ERROR, "昵称不能为空");
+        }
+        user.setNickname(nickname);
+        user.setAvatar(normalizeAvatar(req.getAvatar()));
+        userMapper.updateById(user);
+        return me();
+    }
+
+    private String normalizeAvatar(String avatar) {
+        if (avatar == null || avatar.isBlank()) {
+            return null;
+        }
+        String value = avatar.trim();
+        if (value.startsWith("https://") || value.startsWith("http://")
+                || value.startsWith("data:image/")) {
+            return value;
+        }
+        // 预置头像用 1-2 个 emoji 字符表示，避免再引入文件上传服务
+        if (value.codePointCount(0, value.length()) <= 2) {
+            return value;
+        }
+        throw new BizException(ResultCode.PARAM_ERROR, "头像仅支持 emoji 或 http(s) 图片链接");
     }
 
     private String codeKey(String scene, String account) {

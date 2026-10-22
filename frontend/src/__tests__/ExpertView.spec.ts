@@ -57,6 +57,7 @@ async function mountExpert(eligible: boolean) {
     account: 'expert@example.com',
     accountType: 'email',
     nickname: '达人甲',
+    avatar: null,
     userLevel: 'L3',
     profileCompleted: true,
     dailyGenerateQuota: 10,

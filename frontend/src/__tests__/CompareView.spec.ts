@@ -146,7 +146,7 @@ describe('CompareView', () => {
 
     await wrapper
       .findAll('button')
-      .find((b) => b.text() === '混搭所选')!
+      .find((b) => b.text().includes('混搭所选'))!
       .trigger('click')
     await flushPromises()
 
@@ -173,7 +173,7 @@ describe('CompareView', () => {
     await flushPromises()
     await wrapper
       .findAll('button')
-      .find((b) => b.text() === '混搭所选')!
+      .find((b) => b.text().includes('混搭所选'))!
       .trigger('click')
     await flushPromises()
 

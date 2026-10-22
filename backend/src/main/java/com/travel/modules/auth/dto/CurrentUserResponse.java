@@ -12,6 +12,7 @@ public class CurrentUserResponse {
     /** mobile / email */
     private String accountType;
     private String nickname;
+    private String avatar;
     private String userLevel;
     private Boolean profileCompleted;
     private Integer dailyGenerateQuota;

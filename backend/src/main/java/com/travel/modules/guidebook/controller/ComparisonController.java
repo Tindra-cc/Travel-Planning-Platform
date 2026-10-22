@@ -5,6 +5,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.travel.common.Result;
@@ -33,6 +34,13 @@ public class ComparisonController {
     @PostMapping
     public Result<CompareResponse> start(@RequestBody CompareRequest req) {
         return Result.success(comparisonService.start(req));
+    }
+
+    @Operation(summary = "最近一次对比", description = "用于退出后恢复上次对比结果；没有时返回 null")
+    @GetMapping("/latest")
+    public Result<ComparisonDetailResponse> latest(
+            @RequestParam(required = false) Long baseGuidebookId) {
+        return Result.success(comparisonService.latest(baseGuidebookId));
     }
 
     @Operation(summary = "对比详情（轮询）")

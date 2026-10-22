@@ -32,12 +32,15 @@ class GuidebookConflictServiceTest {
     @Mock
     private GuidebookMapper guidebookMapper;
 
+    @Mock
+    private GuidebookVersionService versionService;
+
     private GuidebookConflictService service;
 
     @BeforeEach
     void setUp() {
         UserContext.set(new LoginUser(USER_ID, "user1@test.local"));
-        service = new GuidebookConflictService(guidebookMapper);
+        service = new GuidebookConflictService(guidebookMapper, versionService);
     }
 
     @AfterEach

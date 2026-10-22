@@ -2,7 +2,10 @@
   <div class="me-page">
     <el-card class="account-card">
       <div class="account-head">
-        <div class="avatar">{{ avatarText }}</div>
+        <div class="avatar" :class="{ 'avatar-image': !!avatarUrl }" @click="openEdit">
+          <img v-if="avatarUrl" :src="avatarUrl" alt="头像" />
+          <template v-else>{{ avatarText }}</template>
+        </div>
         <div class="account-info">
           <div class="nickname">{{ user?.nickname ?? '旅行者' }}</div>
           <div class="account-line">
@@ -10,6 +13,7 @@
             <el-tag v-if="user" size="small" effect="plain">{{ user.userLevel }}</el-tag>
           </div>
         </div>
+        <el-button class="edit-btn" size="small" text @click="openEdit">编辑资料</el-button>
       </div>
 
       <el-alert
@@ -83,6 +87,55 @@
         <el-empty v-else description="还没有对话" :image-size="72" />
       </el-card>
     </div>
+
+    <el-dialog v-model="editVisible" title="编辑个人资料" width="420px" append-to-body>
+      <div class="edit-preview">
+        <div class="avatar" :class="{ 'avatar-image': isImageAvatar(editForm.avatar) }">
+          <img v-if="isImageAvatar(editForm.avatar)" :src="editForm.avatar" alt="头像预览" />
+          <template v-else>{{ editForm.avatar || editForm.nickname.slice(0, 1) || '旅' }}</template>
+        </div>
+        <div class="edit-preview-text">
+          <strong>{{ editForm.nickname.trim() || '旅行者' }}</strong>
+          <span>昵称与头像会展示在个人中心</span>
+        </div>
+      </div>
+
+      <el-form label-position="top" class="edit-form">
+        <el-form-item label="昵称">
+          <el-input
+            v-model="editForm.nickname"
+            maxlength="20"
+            show-word-limit
+            placeholder="给自己起个旅行昵称"
+          />
+        </el-form-item>
+        <el-form-item label="头像">
+          <div class="avatar-grid">
+            <button
+              v-for="item in AVATAR_PRESETS"
+              :key="item"
+              type="button"
+              class="avatar-option"
+              :class="{ active: editForm.avatar === item }"
+              @click="editForm.avatar = item"
+            >
+              {{ item }}
+            </button>
+          </div>
+          <el-input
+            v-model="editForm.avatar"
+            class="avatar-url"
+            placeholder="或粘贴 http(s) 图片链接"
+          />
+          <el-button size="small" text @click="editForm.avatar = ''">恢复默认（昵称首字）</el-button>
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button @click="editVisible = false">取消</el-button>
+        <el-button type="primary" :loading="editSaving" @click="saveProfile">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -121,7 +174,54 @@ const sessions = ref<SessionListItem[]>([])
 const guidebookLoading = ref(false)
 const sessionLoading = ref(false)
 
-const avatarText = computed(() => (user.value?.nickname ?? '旅').slice(0, 1))
+const AVATAR_PRESETS = ['🧳', '🌏', '🏔️', '🏝️', '🚂', '📷', '🍜', '🎒']
+
+const editVisible = ref(false)
+const editSaving = ref(false)
+const editForm = ref({ nickname: '', avatar: '' })
+
+function isImageAvatar(value: string | null | undefined) {
+  return !!value && (value.startsWith('http://') || value.startsWith('https://')
+    || value.startsWith('data:image/'))
+}
+
+const avatarUrl = computed(() =>
+  isImageAvatar(user.value?.avatar) ? (user.value?.avatar as string) : ''
+)
+const avatarText = computed(() => {
+  const current = user.value?.avatar
+  if (current && !isImageAvatar(current)) return current
+  return (user.value?.nickname ?? '旅').slice(0, 1)
+})
+
+function openEdit() {
+  editForm.value = {
+    nickname: user.value?.nickname ?? '',
+    avatar: user.value?.avatar ?? ''
+  }
+  editVisible.value = true
+}
+
+async function saveProfile() {
+  const nickname = editForm.value.nickname.trim()
+  if (!nickname) {
+    ElMessage.warning('昵称不能为空')
+    return
+  }
+  editSaving.value = true
+  try {
+    await auth.updateProfile({
+      nickname,
+      avatar: editForm.value.avatar.trim() || null
+    })
+    ElMessage.success('资料已更新')
+    editVisible.value = false
+  } catch {
+    // 拦截器已提示
+  } finally {
+    editSaving.value = false
+  }
+}
 
 function statusLabel(status: string) {
   return GUIDEBOOK_STATUS_LABELS[status] ?? status
@@ -197,9 +297,19 @@ onMounted(async () => {
   font-size: 20px;
   font-weight: 600;
   flex-shrink: 0;
+  cursor: pointer;
+  overflow: hidden;
+}
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .account-info {
   min-width: 0;
+}
+.edit-btn {
+  margin-left: auto;
 }
 .nickname {
   font-size: 17px;
@@ -259,6 +369,59 @@ onMounted(async () => {
   flex-direction: column;
   gap: var(--space-4);
   min-width: 0;
+}
+
+.edit-preview {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 12px;
+  margin-bottom: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--brand-050);
+}
+.edit-preview-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.edit-preview-text strong {
+  font-size: 15px;
+  color: var(--text-1);
+}
+.edit-preview-text span {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.avatar-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.avatar-option {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: #fff;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.avatar-option:hover {
+  border-color: var(--brand-500);
+  transform: translateY(-1px);
+}
+.avatar-option.active {
+  border-color: var(--brand-500);
+  box-shadow: 0 0 0 2px var(--brand-100);
+}
+.avatar-url {
+  margin-bottom: 4px;
 }
 .card-header {
   display: flex;

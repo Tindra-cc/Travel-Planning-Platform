@@ -26,9 +26,75 @@
       <el-button type="primary" @click="router.push('/chat')">去对话聊聊</el-button>
     </div>
 
-    <div v-else class="grid">
+    <template v-else>
+      <section v-if="featured.length" class="featured">
+        <div class="featured-head">
+          <h2>🔥 热门精选</h2>
+          <span>大家都在看</span>
+        </div>
+        <div class="featured-grid">
+          <article class="feature-main" @click="goDetail(featureMain)">
+            <div class="feature-cover">
+              <img
+                v-if="featureMain.coverUrl && !coverFailed(featureMain.postId)"
+                :src="featureMain.coverUrl"
+                :alt="featureMain.title"
+                @error="onCoverError(featureMain.postId)"
+              />
+              <div v-else class="cover-fallback">
+                <span>{{ featureMain.destination.charAt(0) }}</span>
+              </div>
+              <span class="feature-badge">热门 · {{ formatCount(featureMain.viewCount) }} 浏览</span>
+            </div>
+            <div class="feature-body">
+              <h3>{{ featureMain.title }}</h3>
+              <p class="feature-meta">
+                <span>{{ featureMain.destination }}</span>
+                <span v-if="featureMain.durationDays"> · {{ featureMain.durationDays }} 天</span>
+                <span> · ♡ {{ formatCount(featureMain.likeCount) }}</span>
+              </p>
+              <p v-if="featureMain.summary" class="feature-summary">{{ featureMain.summary }}</p>
+            </div>
+          </article>
+
+          <div class="feature-side">
+            <article
+              v-for="post in featured.slice(1)"
+              :key="post.postId"
+              class="feature-small"
+              @click="goDetail(post)"
+            >
+              <div class="feature-small-cover">
+                <img
+                  v-if="post.coverUrl && !coverFailed(post.postId)"
+                  :src="post.coverUrl"
+                  :alt="post.title"
+                  loading="lazy"
+                  @error="onCoverError(post.postId)"
+                />
+                <div v-else class="cover-fallback">
+                  <span>{{ post.destination.charAt(0) }}</span>
+                </div>
+              </div>
+              <div class="feature-small-body">
+                <h4>{{ post.title }}</h4>
+                <span class="feature-meta">
+                  {{ post.destination }} · ♡ {{ formatCount(post.likeCount) }}
+                </span>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <div class="section-head">
+        <h2>{{ featured.length ? '更多攻略' : '全部攻略' }}</h2>
+        <span>{{ items.length }} 篇</span>
+      </div>
+
+    <div class="grid">
       <article
-        v-for="post in items"
+        v-for="post in gridItems"
         :key="post.postId"
         class="card"
         @click="goDetail(post)"
@@ -62,10 +128,11 @@
       </article>
     </div>
 
-    <div class="more">
-      <el-button v-if="hasMore" :loading="loadingMore" @click="loadMore">加载更多</el-button>
-      <span v-else-if="items.length" class="no-more">没有更多了</span>
-    </div>
+      <div class="more">
+        <el-button v-if="hasMore" :loading="loadingMore" @click="loadMore">加载更多</el-button>
+        <span v-else-if="items.length" class="no-more">没有更多了</span>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -79,6 +146,9 @@ const PAGE_SIZE = 12
 
 const router = useRouter()
 const items = ref<GuidePostItem[]>([])
+const featured = ref<GuidePostItem[]>([])
+// 精选区仅在 featured 非空时渲染，抽出首条避免模板下标可能为空
+const featureMain = computed(() => featured.value[0] as GuidePostItem)
 const total = ref(0)
 const page = ref(0)
 const loading = ref(false)
@@ -86,6 +156,10 @@ const loadingMore = ref(false)
 const coverFailedIds = ref(new Set<string>())
 
 const hasMore = computed(() => items.value.length < total.value)
+const featuredIds = computed(() => new Set(featured.value.map((post) => post.postId)))
+const gridItems = computed(() =>
+  items.value.filter((post) => !featuredIds.value.has(post.postId))
+)
 
 function coverFailed(postId: string) {
   return coverFailedIds.value.has(postId)
@@ -117,6 +191,13 @@ async function load(targetPage: number, append: boolean) {
   try {
     const res = await recommendGuides(targetPage, PAGE_SIZE)
     items.value = append ? [...items.value, ...res.list] : res.list
+    // 热门位只在首屏确定一次，翻页时保持位置稳定
+    if (!append && !featured.value.length) {
+      featured.value = [...res.list]
+        .sort((a, b) => (b.viewCount ?? 0) - (a.viewCount ?? 0)
+          || (b.likeCount ?? 0) - (a.likeCount ?? 0))
+        .slice(0, 3)
+    }
     // 后端 Long 统一序列化为字符串，分页字段必须转回数字
     total.value = Number(res.total)
     page.value = Number(res.page)
@@ -157,6 +238,144 @@ onMounted(() => load(1, false))
   margin: 0;
   font-size: 14px;
   color: var(--text-2);
+}
+
+.featured {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.featured-head,
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.featured-head h2,
+.section-head h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--text-1);
+}
+.featured-head span,
+.section-head span {
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+.featured-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+.feature-main,
+.feature-small {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.feature-main:hover,
+.feature-small:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-float);
+}
+
+.feature-cover {
+  position: relative;
+  aspect-ratio: 16 / 8.2;
+  background: var(--brand-050);
+  overflow: hidden;
+}
+.feature-cover img,
+.feature-small-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.feature-badge {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--brand-600);
+  font-size: 12px;
+  font-weight: 600;
+}
+.feature-body {
+  padding: 16px 18px 18px;
+}
+.feature-body h3 {
+  margin: 0 0 8px;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--text-1);
+}
+.feature-meta {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-3);
+}
+.feature-summary {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.feature-side {
+  display: grid;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  min-height: 0;
+}
+.feature-small {
+  display: grid;
+  grid-template-columns: 40% minmax(0, 1fr);
+  min-height: 0;
+}
+.feature-small-cover {
+  background: var(--brand-050);
+  overflow: hidden;
+  min-height: 132px;
+}
+.feature-small-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 16px;
+  min-width: 0;
+}
+.feature-small-body h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--text-1);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.section-head {
+  margin-top: var(--space-2);
 }
 
 .grid {
@@ -312,5 +531,26 @@ onMounted(() => load(1, false))
 .no-more {
   font-size: 13px;
   color: var(--text-3);
+}
+
+@media (max-width: 860px) {
+  .featured-grid {
+    grid-template-columns: 1fr;
+  }
+  .feature-side {
+    grid-template-rows: none;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 560px) {
+  .feature-side {
+    grid-template-columns: 1fr;
+  }
+  .feature-small-cover {
+    min-height: 108px;
+  }
+  .feature-body h3 {
+    font-size: 18px;
+  }
 }
 </style>

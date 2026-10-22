@@ -107,6 +107,14 @@ export function validateGuidebook(guidebookId: string) {
   })
 }
 
+/** 自动顺延重叠时间、压缩超限预算；营业时间类冲突仍需手动处理 */
+export function repairGuidebookConflicts(guidebookId: string) {
+  return request<GuidebookValidateResponse>({
+    url: `/guidebooks/${guidebookId}/conflicts/repair`,
+    method: 'post'
+  })
+}
+
 export function confirmGuidebook(guidebookId: string) {
   return request<GuidebookConfirmResponse>({
     url: `/guidebooks/${guidebookId}/confirm`,

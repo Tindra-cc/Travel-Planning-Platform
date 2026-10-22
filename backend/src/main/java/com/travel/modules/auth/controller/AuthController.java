@@ -2,6 +2,7 @@ package com.travel.modules.auth.controller;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -11,6 +12,7 @@ import com.travel.modules.auth.dto.AuthResponse;
 import com.travel.modules.auth.dto.CurrentUserResponse;
 import com.travel.modules.auth.dto.LoginRequest;
 import com.travel.modules.auth.dto.RegisterRequest;
+import com.travel.modules.auth.dto.UpdateProfileRequest;
 import com.travel.modules.auth.dto.VerifyCodeRequest;
 import com.travel.modules.auth.dto.VerifyCodeResponse;
 import com.travel.modules.auth.service.AuthService;
@@ -59,5 +61,11 @@ public class AuthController {
     @GetMapping("/me")
     public Result<CurrentUserResponse> me() {
         return Result.success(authService.me());
+    }
+
+    @Operation(summary = "修改昵称与头像")
+    @PutMapping("/me")
+    public Result<CurrentUserResponse> updateMe(@Valid @RequestBody UpdateProfileRequest req) {
+        return Result.success(authService.updateProfile(req));
     }
 }

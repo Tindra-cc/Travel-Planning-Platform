@@ -85,6 +85,7 @@ describe('LoginView', () => {
       account: 'a@b.com',
       accountType: 'email',
       nickname: '旅行者',
+      avatar: null,
       userLevel: 'L1',
       profileCompleted: false,
       dailyGenerateQuota: 3,

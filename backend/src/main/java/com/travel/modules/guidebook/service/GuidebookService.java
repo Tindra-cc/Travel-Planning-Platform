@@ -10,6 +10,8 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -532,107 +534,239 @@ public class GuidebookService {
         return guidebook;
     }
 
+    private static final Map<String, String> NODE_TYPE_LABELS = Map.of(
+            "activity", "游玩", "meal", "餐饮", "transport", "交通",
+            "stay", "住宿", "free", "自由活动");
+
+    private String nodeTypeLabel(String type) {
+        return type == null ? "安排" : NODE_TYPE_LABELS.getOrDefault(type, type);
+    }
+
+    /** Markdown 导出：按天分节，每个节点独立成块，避免所有字段挤在一行。 */
     private String toMarkdown(Guidebook guidebook) {
         StringBuilder sb = new StringBuilder();
         sb.append("# ").append(text(guidebook.getTitle(), "旅行攻略")).append("\n\n");
-        if (guidebook.getIntent() != null) {
-            var i = guidebook.getIntent();
-            sb.append("- 目的地：").append(i.getDestination()).append('\n');
-            if (i.getDateWindow() != null) {
-                sb.append("- 日期：").append(i.getDateWindow().getStart())
-                        .append(" ~ ").append(i.getDateWindow().getEnd()).append('\n');
+        appendMarkdownMeta(sb, guidebook);
+        appendMarkdownOverview(sb, guidebook.getDays());
+
+        if (guidebook.getDays() != null) {
+            for (GuidebookDayDto day : guidebook.getDays()) {
+                sb.append("## 第 ").append(day.getDay()).append(" 天\n\n");
+                if (day.getNodes() == null || day.getNodes().isEmpty()) {
+                    sb.append("_本日暂无安排_\n\n");
+                    continue;
+                }
+                for (GuidebookNodeDto node : day.getNodes()) {
+                    sb.append("### ");
+                    if (node.getTimeSlot() != null
+                            && StringUtils.hasText(node.getTimeSlot().getStart())) {
+                        sb.append(node.getTimeSlot().getStart());
+                        if (StringUtils.hasText(node.getTimeSlot().getEnd())) {
+                            sb.append(" - ").append(node.getTimeSlot().getEnd());
+                        }
+                        sb.append(" · ");
+                    }
+                    sb.append(node.getPlace() != null && StringUtils.hasText(node.getPlace().getName())
+                            ? node.getPlace().getName() : "待定地点");
+                    sb.append("\n\n");
+                    sb.append("- 类型：").append(nodeTypeLabel(node.getType())).append('\n');
+                    if (StringUtils.hasText(node.getNote())) {
+                        sb.append("- 提示：").append(node.getNote().strip()).append('\n');
+                    }
+                    String source = traceableSource(node.getSource());
+                    if (source != null) {
+                        sb.append("- 参考：").append(source).append('\n');
+                    }
+                    sb.append('\n');
+                }
             }
-            if (i.getBudget() != null) {
-                sb.append("- 预算：").append(i.getBudget().getAmount())
-                        .append(' ').append(i.getBudget().getCurrency()).append('\n');
-            }
-            sb.append('\n');
         }
-        for (GuidebookDayDto day : guidebook.getDays()) {
-            sb.append("## 第 ").append(day.getDay()).append(" 天\n\n");
-            if (day.getNodes() == null) {
-                continue;
-            }
-            for (GuidebookNodeDto node : day.getNodes()) {
-                sb.append("- ");
-                if (node.getTimeSlot() != null) {
-                    sb.append(node.getTimeSlot().getStart()).append('-')
-                            .append(node.getTimeSlot().getEnd()).append(' ');
-                }
-                if (node.getPlace() != null) {
-                    sb.append(node.getPlace().getName()).append(' ');
-                }
-                sb.append('（').append(node.getType()).append("）");
-                if (StringUtils.hasText(node.getNote())) {
-                    sb.append("：").append(node.getNote());
-                }
-                String source = traceableSource(node.getSource());
-                if (source != null) {
-                    sb.append(" [").append(source).append(']');
-                }
-                sb.append('\n');
-            }
-            sb.append('\n');
-        }
+
         BudgetBreakdownDto budget = guidebook.getBudgetBreakdown();
-        if (budget != null && budget.getItems() != null) {
-            sb.append("## 预算拆解\n\n| 类别 | 最低 | 最高 |\n|---|---|---|\n");
+        if (budget != null && budget.getItems() != null && !budget.getItems().isEmpty()) {
+            String currency = StringUtils.hasText(budget.getCurrency()) ? budget.getCurrency() : "CNY";
+            sb.append("## 预算拆解\n\n");
+            sb.append("| 类别 | 最低 | 最高 |\n|---|---:|---:|\n");
             for (BudgetBreakdownDto.Item item : budget.getItems()) {
-                sb.append("| ").append(item.getCategory()).append(" | ")
-                        .append(item.getMin()).append(" | ").append(item.getMax()).append(" |\n");
+                sb.append("| ").append(item.getCategory() == null ? "其他" : item.getCategory())
+                        .append(" | ").append(money(item.getMin())).append(" | ")
+                        .append(money(item.getMax())).append(" |\n");
             }
             if (budget.getTotal() != null) {
-                sb.append("| 合计 | ").append(budget.getTotal().getMin()).append(" | ")
-                        .append(budget.getTotal().getMax()).append(" |\n");
+                sb.append("| **合计** | **").append(money(budget.getTotal().getMin()))
+                        .append("** | **").append(money(budget.getTotal().getMax()))
+                        .append("** |\n");
             }
-            sb.append('\n');
+            sb.append("\n金额单位：").append(currency).append("\n\n");
         }
-        appendTips(sb, "行前准备", guidebook.getPackingList());
-        appendTips(sb, "文化贴士", guidebook.getCulturalTips());
-        appendTips(sb, "避坑提示", guidebook.getPitfallTips());
-        sb.append("> ").append(DISCLAIMER).append('\n');
+        appendTips(sb, "## 行前准备", guidebook.getPackingList());
+        appendTips(sb, "## 文化贴士", guidebook.getCulturalTips());
+        appendTips(sb, "## 避坑提示", guidebook.getPitfallTips());
+        sb.append("---\n\n> ").append(DISCLAIMER).append('\n');
         return sb.toString();
     }
 
+    private void appendMarkdownMeta(StringBuilder sb, Guidebook guidebook) {
+        var i = guidebook.getIntent();
+        if (i == null) {
+            return;
+        }
+        StringBuilder meta = new StringBuilder();
+        if (StringUtils.hasText(i.getDestination())) {
+            meta.append("目的地：").append(i.getDestination());
+        }
+        if (i.getDateWindow() != null) {
+            if (meta.length() > 0) meta.append(" ｜ ");
+            meta.append("日期：").append(i.getDateWindow().getStart())
+                    .append(" ~ ").append(i.getDateWindow().getEnd());
+        }
+        if (i.getBudget() != null && i.getBudget().getAmount() != null) {
+            if (meta.length() > 0) meta.append(" ｜ ");
+            meta.append("预算：").append(money(i.getBudget().getAmount()))
+                    .append(' ').append(i.getBudget().getCurrency());
+        }
+        if (meta.length() > 0) {
+            sb.append("> ").append(meta).append("\n\n");
+        }
+    }
+
+    /** 行程总览表格，方便快速扫一眼每天去了哪里。 */
+    private void appendMarkdownOverview(StringBuilder sb, List<GuidebookDayDto> days) {
+        if (days == null || days.isEmpty()) {
+            return;
+        }
+        sb.append("## 行程总览\n\n| 天数 | 主要安排 |\n|---|---|\n");
+        for (GuidebookDayDto day : days) {
+            String places = day.getNodes() == null ? "" : day.getNodes().stream()
+                    .filter(Objects::nonNull)
+                    .map(n -> n.getPlace() != null && StringUtils.hasText(n.getPlace().getName())
+                            ? n.getPlace().getName() : "待定地点")
+                    .collect(Collectors.joining(" → "));
+            sb.append("| 第 ").append(day.getDay()).append(" 天 | ")
+                    .append(places.isBlank() ? "自由活动" : places).append(" |\n");
+        }
+        sb.append('\n');
+    }
+
+    /** HTML 导出：内嵌样式、无外部依赖，手机和打印都能直接看。 */
     private String toHtml(Guidebook guidebook) {
         StringBuilder sb = new StringBuilder();
-        sb.append("<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\"><title>")
-                .append(escape(text(guidebook.getTitle(), "旅行攻略")))
-                .append("</title></head><body>");
-        sb.append("<h1>").append(escape(text(guidebook.getTitle(), "旅行攻略"))).append("</h1>");
-        for (GuidebookDayDto day : guidebook.getDays()) {
-            sb.append("<h2>第 ").append(day.getDay()).append(" 天</h2><ul>");
-            if (day.getNodes() != null) {
-                for (GuidebookNodeDto node : day.getNodes()) {
-                    sb.append("<li>");
-                    if (node.getTimeSlot() != null) {
-                        sb.append(escape(node.getTimeSlot().getStart())).append('-')
-                                .append(escape(node.getTimeSlot().getEnd())).append(' ');
+        String title = escape(text(guidebook.getTitle(), "旅行攻略"));
+        sb.append("<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\">")
+                .append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">")
+                .append("<title>").append(title).append("</title>")
+                .append("<style>").append(EXPORT_CSS).append("</style></head><body>")
+                .append("<main class=\"page\">")
+                .append("<header class=\"hero\"><h1>").append(title).append("</h1>");
+        appendHtmlMeta(sb, guidebook);
+        sb.append("</header>");
+
+        if (guidebook.getDays() != null) {
+            for (GuidebookDayDto day : guidebook.getDays()) {
+                sb.append("<section class=\"day\"><h2>第 ").append(day.getDay())
+                        .append(" 天</h2><ol class=\"timeline\">");
+                if (day.getNodes() == null || day.getNodes().isEmpty()) {
+                    sb.append("<li class=\"empty\">本日暂无安排</li>");
+                } else {
+                    for (GuidebookNodeDto node : day.getNodes()) {
+                        sb.append("<li class=\"node\"><div class=\"time\">")
+                                .append(node.getTimeSlot() != null
+                                        ? escape(node.getTimeSlot().getStart()) + "<br>"
+                                            + escape(node.getTimeSlot().getEnd())
+                                        : "待定")
+                                .append("</div><div class=\"body\"><div class=\"node-head\">")
+                                .append("<strong>")
+                                .append(escape(node.getPlace() != null
+                                        ? node.getPlace().getName() : "待定地点"))
+                                .append("</strong><span class=\"badge\">")
+                                .append(escape(nodeTypeLabel(node.getType())))
+                                .append("</span></div>");
+                        if (StringUtils.hasText(node.getNote())) {
+                            sb.append("<p class=\"note\">").append(escape(node.getNote().strip()))
+                                    .append("</p>");
+                        }
+                        if (node.getOpeningHours() != null
+                                && !node.getOpeningHours().isBlank()) {
+                            sb.append("<p class=\"meta-line\">营业时间：")
+                                    .append(escape(node.getOpeningHours())).append("</p>");
+                        }
+                        String source = traceableSource(node.getSource());
+                        if (source != null) {
+                            sb.append("<p class=\"meta-line\">参考：")
+                                    .append(escape(source)).append("</p>");
+                        }
+                        sb.append("</div></li>");
                     }
-                    if (node.getPlace() != null) {
-                        sb.append("<strong>").append(escape(node.getPlace().getName()))
-                                .append("</strong> ");
-                    }
-                    if (StringUtils.hasText(node.getNote())) {
-                        sb.append(escape(node.getNote()));
-                    }
-                    sb.append("</li>");
                 }
+                sb.append("</ol></section>");
             }
-            sb.append("</ul>");
         }
+
+        BudgetBreakdownDto budget = guidebook.getBudgetBreakdown();
+        if (budget != null && budget.getItems() != null && !budget.getItems().isEmpty()) {
+            String currency = StringUtils.hasText(budget.getCurrency()) ? budget.getCurrency() : "CNY";
+            sb.append("<section class=\"card\"><h2>预算拆解</h2><table><thead><tr>")
+                    .append("<th>类别</th><th class=\"num\">最低</th><th class=\"num\">最高</th>")
+                    .append("</tr></thead><tbody>");
+            for (BudgetBreakdownDto.Item item : budget.getItems()) {
+                sb.append("<tr><td>").append(escape(item.getCategory() == null ? "其他" : item.getCategory()))
+                        .append("</td><td class=\"num\">").append(money(item.getMin()))
+                        .append("</td><td class=\"num\">").append(money(item.getMax()))
+                        .append("</td></tr>");
+            }
+            if (budget.getTotal() != null) {
+                sb.append("<tr class=\"total\"><td>合计</td><td class=\"num\">")
+                        .append(money(budget.getTotal().getMin()))
+                        .append("</td><td class=\"num\">")
+                        .append(money(budget.getTotal().getMax()))
+                        .append("</td></tr>");
+            }
+            sb.append("</tbody></table><p class=\"meta-line\">金额单位：")
+                    .append(escape(currency)).append("</p></section>");
+        }
+
         appendHtmlTips(sb, "行前准备", guidebook.getPackingList());
         appendHtmlTips(sb, "文化贴士", guidebook.getCulturalTips());
         appendHtmlTips(sb, "避坑提示", guidebook.getPitfallTips());
-        sb.append("<blockquote>").append(escape(DISCLAIMER)).append("</blockquote></body></html>");
+        sb.append("<footer class=\"disclaimer\">").append(escape(DISCLAIMER))
+                .append("</footer></main></body></html>");
         return sb.toString();
     }
 
-    private void appendTips(StringBuilder sb, String title, List<String> tips) {
+    private void appendHtmlMeta(StringBuilder sb, Guidebook guidebook) {
+        var i = guidebook.getIntent();
+        if (i == null) {
+            return;
+        }
+        sb.append("<div class=\"chips\">");
+        if (StringUtils.hasText(i.getDestination())) {
+            sb.append("<span class=\"chip\">📍 ").append(escape(i.getDestination()))
+                    .append("</span>");
+        }
+        if (i.getDateWindow() != null) {
+            sb.append("<span class=\"chip\">🗓 ")
+                    .append(escape(i.getDateWindow().getStart())).append(" ~ ")
+                    .append(escape(i.getDateWindow().getEnd())).append("</span>");
+        }
+        if (i.getBudget() != null && i.getBudget().getAmount() != null) {
+            sb.append("<span class=\"chip\">💰 ").append(money(i.getBudget().getAmount()))
+                    .append(' ').append(escape(i.getBudget().getCurrency())).append("</span>");
+        }
+        sb.append("</div>");
+    }
+
+    private String money(java.math.BigDecimal value) {
+        if (value == null) {
+            return "-";
+        }
+        return value.stripTrailingZeros().toPlainString();
+    }
+
+    private void appendTips(StringBuilder sb, String heading, List<String> tips) {
         if (tips == null || tips.isEmpty()) {
             return;
         }
-        sb.append("## ").append(title).append("\n\n");
+        sb.append(heading).append("\n\n");
         tips.forEach(tip -> sb.append("- ").append(tip).append('\n'));
         sb.append('\n');
     }
@@ -641,10 +775,66 @@ public class GuidebookService {
         if (tips == null || tips.isEmpty()) {
             return;
         }
-        sb.append("<h2>").append(escape(title)).append("</h2><ul>");
+        sb.append("<section class=\"card\"><h2>").append(escape(title))
+                .append("</h2><ul class=\"tips\">");
         tips.forEach(tip -> sb.append("<li>").append(escape(tip)).append("</li>"));
-        sb.append("</ul>");
+        sb.append("</ul></section>");
     }
+
+    private static final String EXPORT_CSS = """
+            :root{--brand:#2f6fed;--text:#1f2430;--muted:#6b7280;--line:#e6e8ee;--bg:#f5f6f8;}
+            *{box-sizing:border-box;}
+            body{margin:0;background:var(--bg);color:var(--text);
+              font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+              line-height:1.7;}
+            .page{max-width:860px;margin:0 auto;padding:28px 20px 56px;}
+            .hero{background:linear-gradient(135deg,#2f6fed,#5b8dff);color:#fff;
+              border-radius:18px;padding:28px 26px;box-shadow:0 10px 28px rgba(47,111,237,.22);}
+            .hero h1{margin:0 0 12px;font-size:26px;line-height:1.35;letter-spacing:.2px;}
+            .chips{display:flex;flex-wrap:wrap;gap:8px;}
+            .chip{background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.32);
+              border-radius:999px;padding:3px 12px;font-size:13px;}
+            .day,.card{background:#fff;border-radius:16px;padding:22px 24px;margin-top:18px;
+              box-shadow:0 2px 10px rgba(16,24,40,.06);}
+            h2{font-size:18px;margin:0 0 16px;}
+            .timeline{list-style:none;margin:0;padding:0;position:relative;}
+            .timeline:before{content:"";position:absolute;left:63px;top:6px;bottom:6px;
+              width:2px;background:var(--line);}
+            .node{display:flex;gap:16px;padding:12px 0;position:relative;}
+            .node+.node{border-top:1px dashed var(--line);}
+            .time{width:54px;flex:none;text-align:right;font-size:12px;color:var(--muted);
+              padding-top:2px;line-height:1.5;}
+            .body{flex:1;min-width:0;}
+            .node-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+            .node-head strong{font-size:15px;}
+            .badge{background:#eef4ff;color:var(--brand);border-radius:999px;
+              padding:1px 9px;font-size:12px;}
+            .note{margin:6px 0 0;color:#374151;font-size:14px;}
+            .meta-line{margin:4px 0 0;color:var(--muted);font-size:12px;}
+            .empty{color:var(--muted);font-size:14px;padding:8px 0;}
+            table{width:100%;border-collapse:collapse;font-size:14px;}
+            th,td{padding:9px 10px;border-bottom:1px solid var(--line);text-align:left;}
+            th{background:#f8fafc;color:var(--muted);font-weight:600;}
+            .num{text-align:right;font-variant-numeric:tabular-nums;}
+            .total td{font-weight:700;border-top:2px solid var(--line);}
+            .tips{margin:0;padding-left:20px;font-size:14px;}
+            .tips li{margin:4px 0;}
+            .disclaimer{color:var(--muted);font-size:12px;margin-top:22px;text-align:center;}
+            @media (max-width:600px){
+              .page{padding:16px 12px 40px;}
+              .hero{padding:22px 18px;border-radius:14px;}
+              .hero h1{font-size:21px;}
+              .day,.card{padding:18px 16px;}
+              .timeline:before{left:50px;}
+              .time{width:44px;}
+            }
+            @media print{
+              body{background:#fff;}
+              .page{max-width:none;padding:0;}
+              .hero{box-shadow:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+              .day,.card{box-shadow:none;border:1px solid var(--line);page-break-inside:avoid;}
+            }
+            """;
 
     private String text(String value, String fallback) {
         return StringUtils.hasText(value) ? value : fallback;

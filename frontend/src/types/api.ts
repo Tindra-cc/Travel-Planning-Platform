@@ -51,6 +51,8 @@ export interface CurrentUser {
   account: string
   accountType: 'mobile' | 'email' | string
   nickname: string
+  /** 预置 emoji 或图片 URL，为空时显示昵称首字 */
+  avatar: string | null
   userLevel: string
   profileCompleted: boolean
   dailyGenerateQuota: number

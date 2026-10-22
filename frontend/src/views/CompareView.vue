@@ -13,7 +13,17 @@
               {{ statusLabel(detail.status) }}
             </el-tag>
           </div>
-          <el-button size="small" @click="backToBase">返回攻略</el-button>
+          <div class="header-actions">
+            <el-button
+              v-if="detail && detail.status !== 'processing'"
+              size="small"
+              :loading="regenerating"
+              @click="onRegenerate"
+            >
+              重新生成对比
+            </el-button>
+            <el-button size="small" @click="backToBase">返回攻略</el-button>
+          </div>
         </div>
       </template>
 
@@ -108,12 +118,27 @@
       <el-empty v-if="!detail && !loading" description="对比任务不存在或已删除" />
     </el-card>
 
-    <div v-if="detail && picks.length" class="mix-bar">
+    <div v-if="detail && detail.status !== 'processing'" class="mix-bar">
       <div class="mix-info">
-        <span>已选 {{ picks.length }} 个节点</span>
-        <el-button size="small" text @click="selected = []">清空</el-button>
+        <template v-if="selectedNodes.length">
+          <span class="mix-count">已选 {{ selectedNodes.length }} 个节点</span>
+          <span class="mix-names">
+            {{ selectedNames }}
+          </span>
+          <el-button size="small" text @click="selected = []">清空</el-button>
+        </template>
+        <span v-else class="muted mix-hint">
+          勾选任意方案中的节点，可跨方案组合成新行程
+        </span>
       </div>
-      <el-button type="primary" :loading="mixing" @click="onMix">混搭所选</el-button>
+      <el-button
+        type="primary"
+        :loading="mixing"
+        :disabled="!picks.length"
+        @click="onMix"
+      >
+        混搭所选节点
+      </el-button>
     </div>
 
     <el-alert
@@ -129,6 +154,10 @@
           {{ item.day ? `第 ${item.day} 天 · ` : '' }}{{ item.message }}
         </li>
       </ul>
+      <div class="conflict-actions">
+        <el-button size="small" @click="selected = []">清空重选</el-button>
+        <span class="muted">取消冲突节点，或换一套时间不重叠的组合后再试</span>
+      </div>
     </el-alert>
   </div>
 </template>
@@ -136,7 +165,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import * as compareApi from '@/api/compare'
 import * as guidebookApi from '@/api/guidebook'
 import type {
@@ -175,6 +204,7 @@ const variantDetails = ref<Record<string, GuidebookDetail>>({})
 const loading = ref(false)
 const selected = ref<string[]>([])
 const mixing = ref(false)
+const regenerating = ref(false)
 const conflicts = ref<NodeConflict[]>([])
 
 let pollTimer: number | null = null
@@ -189,6 +219,27 @@ const picks = computed<MixPick[]>(() =>
     }
   })
 )
+
+// 已选节点回查名字，让用户知道混搭会拼出什么
+const selectedNodes = computed(() =>
+  picks.value.map((pick) => {
+    for (const day of variantDetails.value[pick.guidebookId]?.days ?? []) {
+      const node = (day.nodes ?? []).find((item) => item.nodeId === pick.nodeId)
+      if (node) {
+        return {
+          name: node.place?.name || '待定地点',
+          day: day.day
+        }
+      }
+    }
+    return { name: '未知节点', day: null }
+  })
+)
+
+const selectedNames = computed(() => {
+  const names = selectedNodes.value.map((item) => item.name)
+  return names.length > 3 ? `${names.slice(0, 3).join('、')} 等` : names.join('、')
+})
 
 function statusLabel(status: string) {
   return STATUS_LABELS[status] ?? status
@@ -295,6 +346,36 @@ async function onMix() {
   }
 }
 
+async function onRegenerate() {
+  const baseId = detail.value?.baseGuidebookId
+  if (!baseId) return
+  const variants = (detail.value?.variants ?? [])
+    .map((item) => item.variant)
+    .filter((variant) => variant !== 'mixed')
+  if (variants.length < 2) {
+    ElMessage.warning('至少需要两种方案才能重新对比')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      '重新生成会再消耗一次对比配额，并覆盖当前对比任务，是否继续？',
+      '重新生成对比',
+      { type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  regenerating.value = true
+  try {
+    const res = await compareApi.startComparison(baseId, variants)
+    router.push(`/guidebook/compare/${res.comparisonId}`)
+  } catch {
+    // 拦截器已提示
+  } finally {
+    regenerating.value = false
+  }
+}
+
 function backToBase() {
   if (detail.value?.baseGuidebookId) {
     router.push(`/guidebook/${detail.value.baseGuidebookId}`)
@@ -305,6 +386,16 @@ function backToBase() {
 
 watch(selected, () => {
   conflicts.value = []
+})
+
+// 重新生成会跳到新的 comparisonId，同一组件需要重置状态后重新拉取
+watch(comparisonId, () => {
+  stopPolling()
+  detail.value = null
+  variantDetails.value = {}
+  selected.value = []
+  conflicts.value = []
+  void load()
 })
 
 onMounted(load)
@@ -330,6 +421,12 @@ onBeforeUnmount(stopPolling)
 
 .title-group {
   justify-content: flex-start;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .title {
@@ -427,12 +524,42 @@ onBeforeUnmount(stopPolling)
   display: flex;
   align-items: center;
   gap: 16px;
+  max-width: min(720px, calc(100vw - 24px));
   background: #fff;
   border: 1px solid var(--el-border-color);
   border-radius: 999px;
   padding: 8px 18px;
   box-shadow: 0 6px 20px rgb(0 0 0 / 12%);
   z-index: 20;
+}
+.mix-count {
+  flex-shrink: 0;
+  font-weight: 600;
+}
+.mix-names {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--el-text-color-regular);
+  font-size: 13px;
+}
+.mix-hint {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mix-info {
+  justify-content: flex-start;
+  min-width: 0;
+  flex: 1;
+}
+
+.conflict-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  flex-wrap: wrap;
 }
 
 .conflict-panel {

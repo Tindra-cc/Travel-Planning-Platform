@@ -39,6 +39,10 @@ public class ResourceService {
 
     public static final Set<String> TYPES =
             Set.of("flight", "hotel", "ticket", "car", "dining");
+    /** 目的地没有专属资源时回退到该通用目录，保证任何行程都能演示绑定。 */
+    private static final String GENERIC_DESTINATION = "*";
+    /** 演示资源的供应商名带此标记，跳过时效校验，避免演示数据随时间失效。 */
+    private static final String DEMO_SUPPLIER_MARK = "演示";
     private static final Duration FRESH_LIMIT = Duration.ofHours(48);
 
     private final ResourceSlotMapper resourceSlotMapper;
@@ -52,6 +56,21 @@ public class ResourceService {
         if (!StringUtils.hasText(destination)) {
             throw new BizException(ResultCode.PARAM_ERROR, "destination 不能为空");
         }
+        Page<ResourceSlot> result = resourceSlotMapper.selectPage(
+                new Page<>(Math.max(1, page), Math.min(Math.max(1, pageSize), 100)),
+                query(type, destination, budgetMin, budgetMax));
+        // 目的地暂无专属资源时回退到通用目录，避免演示时绑定面板空白
+        if (result.getTotal() == 0 && !GENERIC_DESTINATION.equals(destination)) {
+            result = resourceSlotMapper.selectPage(
+                    new Page<>(Math.max(1, page), Math.min(Math.max(1, pageSize), 100)),
+                    query(type, GENERIC_DESTINATION, budgetMin, budgetMax));
+        }
+        List<ResourceItemDto> items = result.getRecords().stream().map(this::toItem).toList();
+        return PageResult.of(items, result.getCurrent(), result.getSize(), result.getTotal());
+    }
+
+    private LambdaQueryWrapper<ResourceSlot> query(String type, String destination,
+            BigDecimal budgetMin, BigDecimal budgetMax) {
         LambdaQueryWrapper<ResourceSlot> query = new LambdaQueryWrapper<ResourceSlot>()
                 .eq(ResourceSlot::getType, type)
                 .eq(ResourceSlot::getDestination, destination)
@@ -63,10 +82,7 @@ public class ResourceService {
         if (budgetMin != null) {
             query.ge(ResourceSlot::getPriceMax, budgetMin);
         }
-        Page<ResourceSlot> result = resourceSlotMapper.selectPage(
-                new Page<>(Math.max(1, page), Math.min(Math.max(1, pageSize), 100)), query);
-        List<ResourceItemDto> items = result.getRecords().stream().map(this::toItem).toList();
-        return PageResult.of(items, result.getCurrent(), result.getSize(), result.getTotal());
+        return query;
     }
 
     public ResourceSlot requireEnabled(String resourceSlotId) {
@@ -201,6 +217,10 @@ public class ResourceService {
     }
 
     private boolean fresh(ResourceSlot slot) {
+        // 演示数据没有实时供应商刷新，按「…演示」后缀豁免时效，避免演示几天后全部不可点击
+        if (slot.getSupplier() != null && slot.getSupplier().endsWith(DEMO_SUPPLIER_MARK)) {
+            return true;
+        }
         return slot.getFreshness() != null
                 && slot.getFreshness().isAfter(LocalDateTime.now().minus(FRESH_LIMIT));
     }

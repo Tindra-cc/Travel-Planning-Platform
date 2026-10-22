@@ -12,7 +12,7 @@ import com.travel.modules.guidebook.knowledge.KnowledgeSnippet;
 
 import lombok.RequiredArgsConstructor;
 
-/** Step 2：目的地知识召回；空结果不阻断，标记 no_knowledge。 */
+/** Step 2：目的地知识召回；空结果不阻断，由模型按通用知识继续生成。 */
 @Order(2)
 @Component
 @RequiredArgsConstructor
@@ -45,9 +45,6 @@ public class KnowledgeRetrievalStep implements GenerationStep {
         List<KnowledgeSnippet> snippets = knowledgeService.retrieve(
                 ctx.getIntent().getDestination(), keywords, TOP_K);
         ctx.setKnowledge(snippets);
-        if (snippets.isEmpty()) {
-            ctx.addReason("no_knowledge");
-        }
     }
 
     @SuppressWarnings("unchecked")

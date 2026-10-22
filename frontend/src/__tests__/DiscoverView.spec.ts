@@ -61,7 +61,10 @@ describe('DiscoverView', () => {
     const { wrapper } = await mountView()
 
     expect(mockedRecommend).toHaveBeenCalledWith(1, 12)
-    expect(wrapper.findAll('.card')).toHaveLength(2)
+    // 首屏前三条进入热门大卡片，普通网格不再重复展示
+    expect(wrapper.findAll('.feature-main')).toHaveLength(1)
+    expect(wrapper.findAll('.feature-small')).toHaveLength(1)
+    expect(wrapper.findAll('.card')).toHaveLength(0)
     expect(wrapper.text()).toContain('成都三日慢游')
     expect(wrapper.text()).toContain('1.2万')
     expect(wrapper.text()).toContain('没有更多了')
@@ -89,7 +92,7 @@ describe('DiscoverView', () => {
     await flushPromises()
 
     expect(mockedRecommend).toHaveBeenLastCalledWith(2, 12)
-    expect(wrapper.findAll('.card')).toHaveLength(3)
+    expect(wrapper.findAll('.card')).toHaveLength(1)
     expect(wrapper.text()).toContain('西安四日')
     wrapper.unmount()
   })

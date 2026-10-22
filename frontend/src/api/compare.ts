@@ -16,6 +16,15 @@ export function getComparison(comparisonId: string) {
   })
 }
 
+/** 最近一次对比结果；从未生成过时后端返回 null */
+export function getLatestComparison(baseGuidebookId: string) {
+  return request<ComparisonDetail | null>({
+    url: '/guidebooks/compare/latest',
+    method: 'get',
+    params: { baseGuidebookId }
+  })
+}
+
 export function mixComparison(comparisonId: string, picks: MixPick[]) {
   return request<MixResponse>({
     url: `/guidebooks/compare/${comparisonId}/mix`,

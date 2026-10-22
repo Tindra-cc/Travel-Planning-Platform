@@ -33,6 +33,7 @@ import com.travel.modules.guidebook.dto.NodeConflictDto;
 import com.travel.modules.guidebook.dto.PlaceDto;
 import com.travel.modules.guidebook.dto.TimeSlotDto;
 import com.travel.modules.guidebook.entity.Guidebook;
+import com.travel.modules.guidebook.edit.ItineraryRepairSupport;
 import com.travel.modules.guidebook.entity.GuidebookVersion;
 import com.travel.modules.guidebook.generation.GeneratedContent;
 import com.travel.modules.guidebook.generation.ItineraryJsonParser;
@@ -168,6 +169,10 @@ public class GuidebookAdjustService {
         guidebook.setPackingList(orElse(content.getPackingList(), guidebook.getPackingList()));
         guidebook.setCulturalTips(orElse(content.getCulturalTips(), guidebook.getCulturalTips()));
         guidebook.setPitfallTips(orElse(content.getPitfallTips(), guidebook.getPitfallTips()));
+
+        // 模型改完后同样要压实时间线、收束预算，避免调整后立刻冒出可自动修复的冲突
+        ItineraryRepairSupport.repair(guidebook.getDays(), guidebook.getBudgetBreakdown(),
+                guidebook.getIntent());
 
         if (guidebookMapper.updateById(guidebook) != 1) {
             throw new BizException(ResultCode.CONFLICT, "攻略已被修改，请刷新后重试");

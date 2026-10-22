@@ -18,6 +18,7 @@ vi.mock('@/api/guidebook', () => ({
   deleteGuidebook: vi.fn(),
   exportGuidebook: vi.fn(),
   validateGuidebook: vi.fn(),
+  repairGuidebookConflicts: vi.fn(),
   confirmGuidebook: vi.fn(),
   adjustGuidebook: vi.fn(),
   listGuidebookVersions: vi.fn(),
@@ -37,6 +38,7 @@ vi.mock('@/api/resource', () => ({
 vi.mock('@/api/compare', () => ({
   startComparison: vi.fn(),
   getComparison: vi.fn(),
+  getLatestComparison: vi.fn(),
   mixComparison: vi.fn()
 }))
 
@@ -222,7 +224,8 @@ describe('GuidebookView', () => {
     expect(wrapper.text()).not.toContain('内置资料')
     expect(wrapper.text()).not.toContain('数据时间')
     expect(wrapper.text()).toContain('[K1] 宽窄巷子')
-    expect(wrapper.find('a.citation').attributes('href')).toBe('https://example.com/k1')
+    // 引用改为点击展开的浮层，不再直接跳转外链
+    expect(wrapper.find('button.citation').text()).toContain('[K1] 宽窄巷子')
     expect(wrapper.text()).toContain('预算拆解')
     // 数据源缺失已由演示数据兜底，不再向用户展示降级提示
     expect(wrapper.text()).not.toContain('天气数据不可用')
@@ -411,8 +414,8 @@ describe('GuidebookView', () => {
     await flushPromises()
 
     await wrapper.find('input[placeholder="例如：宽窄巷子"]').setValue('新地点')
-    await wrapper.find('input[placeholder="09:00"]').setValue('09:00')
-    await wrapper.find('input[placeholder="11:00"]').setValue('10:00')
+    // 时间改为下拉选择，创建时默认 09:00-10:00
+    expect(wrapper.find('.time-row').exists()).toBe(true)
     await wrapper
       .findAll('button')
       .find((b) => b.text().includes('保存'))!
@@ -597,7 +600,7 @@ describe('GuidebookView', () => {
       type: 'dining',
       destination: '成都',
       page: 1,
-      pageSize: 10
+      pageSize: 20
     })
     expect(wrapper.text()).toContain('大众点评 演示')
 

@@ -19,6 +19,7 @@ function user(expertEligible: boolean): CurrentUser {
     account: 'expert@example.com',
     accountType: 'email',
     nickname: expertEligible ? '达人甲' : '普通用户',
+    avatar: null,
     userLevel: 'L3',
     profileCompleted: true,
     dailyGenerateQuota: 10,
