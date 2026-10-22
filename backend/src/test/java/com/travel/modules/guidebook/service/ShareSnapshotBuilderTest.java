@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.travel.modules.guidebook.dto.CitationDto;
+import com.travel.modules.guidebook.dto.GuidebookDayDto;
 import com.travel.modules.guidebook.dto.GuidebookNodeDto;
 import com.travel.modules.guidebook.dto.SharedGuidebookSnapshot;
 import com.travel.modules.guidebook.entity.Guidebook;
@@ -35,6 +36,23 @@ class ShareSnapshotBuilderTest {
         assertThat(snapshot.getDegradedMode()).isTrue();
         assertThat(snapshot.getTravelDataAt()).isEqualTo(LocalDateTime.of(2026, 10, 1, 9, 30));
         assertThat(snapshot.getSharedAt()).isNotNull();
+    }
+
+    @Test
+    void sortsNodesByStartTimeWithoutMutatingOriginal() {
+        Guidebook guidebook = TestFixtures.guidebook(5L, 7L, "confirmed");
+        guidebook.setDays(List.of(new GuidebookDayDto(1, List.of(
+                TestFixtures.node("d1-2", "14:00", "15:00", "人民公园"),
+                TestFixtures.node("d1-1", "09:00", "10:00", "宽窄巷子")))));
+
+        SharedGuidebookSnapshot snapshot = builder.build(guidebook);
+
+        assertThat(snapshot.getDays().get(0).getNodes())
+                .extracting(GuidebookNodeDto::getNodeId)
+                .containsExactly("d1-1", "d1-2");
+        assertThat(guidebook.getDays().get(0).getNodes())
+                .extracting(GuidebookNodeDto::getNodeId)
+                .containsExactly("d1-2", "d1-1");
     }
 
     @Test

@@ -53,6 +53,16 @@ const AUTH_LABELS: Record<string, string> = {
   pending: '待客户确认',
   none: '未授权'
 }
+const ACTION_LABELS: Record<string, string> = {
+  view_client: '查看客户',
+  read_profile: '读取画像',
+  generate_guidebook: '生成攻略',
+  list_guidebooks: '查看攻略列表'
+}
+const SCOPE_LABELS: Record<string, string> = {
+  profile: '画像',
+  guidebooks: '攻略'
+}
 
 function statusLabel(status: string) {
   return STATUS_LABELS[status] || status
@@ -64,6 +74,14 @@ function statusType(status: string) {
 
 function authLabel(status: string | null) {
   return AUTH_LABELS[status || 'none'] || status
+}
+
+function actionLabel(action: string) {
+  return ACTION_LABELS[action] || action
+}
+
+function scopeLabel(scope: string | null) {
+  return scope ? SCOPE_LABELS[scope] || scope : '—'
 }
 
 function handlePermissionError(error: unknown) {
@@ -277,9 +295,20 @@ async function loadPublications() {
 }
 
 async function openPublish() {
-  const page = await listGuidebooks(undefined, 1, 50)
-  publishable.value = page.list.filter((item) =>
-    ['draft', 'confirmed', 'executing', 'completed'].includes(item.status)
+  const [page, pubs] = await Promise.all([
+    listGuidebooks(undefined, 1, 50),
+    expertApi.listPublications(1, 100)
+  ])
+  // 已有待审/已发布记录的攻略不能重复发布，避免提交后才报冲突
+  const activeIds = new Set(
+    pubs.list
+      .filter((item) => ['pending_review', 'published'].includes(item.status))
+      .map((item) => item.guidebookId)
+  )
+  publishable.value = page.list.filter(
+    (item) =>
+      ['draft', 'confirmed', 'executing', 'completed'].includes(item.status) &&
+      !activeIds.has(item.guidebookId)
   )
   publishForm.guidebookId = ''
   publishForm.title = ''
@@ -380,7 +409,12 @@ onMounted(async () => {
 
           <el-table :data="clients" v-loading="loading" empty-text="暂无客户">
             <el-table-column prop="name" label="名称" min-width="120" />
-            <el-table-column prop="contact" label="联系方式" min-width="140" />
+            <el-table-column
+              prop="contact"
+              label="联系方式"
+              min-width="180"
+              show-overflow-tooltip
+            />
             <el-table-column label="绑定账号" min-width="120">
               <template #default="{ row }">
                 {{ row.linkedUserId || '未绑定' }}
@@ -491,10 +525,10 @@ onMounted(async () => {
       </template>
     </el-dialog>
 
-    <el-drawer v-model="detailVisible" title="客户详情" size="45%">
+    <el-drawer v-model="detailVisible" title="客户详情" size="520px">
       <el-skeleton v-if="detailLoading" :rows="4" animated />
       <template v-else-if="detail">
-        <el-descriptions :column="1" border>
+        <el-descriptions :column="1" border label-width="92px">
           <el-descriptions-item label="名称">{{ detail.name }}</el-descriptions-item>
           <el-descriptions-item label="联系方式">{{ detail.contact || '—' }}</el-descriptions-item>
           <el-descriptions-item label="绑定账号">
@@ -504,17 +538,21 @@ onMounted(async () => {
             {{ authLabel(detail.authorizationStatus) }}
           </el-descriptions-item>
           <el-descriptions-item label="授权范围">
-            {{ detail.authorizedScopes?.join(' / ') || '—' }}
+            {{ detail.authorizedScopes?.map(scopeLabel).join(' / ') || '—' }}
           </el-descriptions-item>
           <el-descriptions-item label="备注">{{ detail.note || '—' }}</el-descriptions-item>
         </el-descriptions>
 
         <h4 class="section-title">访问审计</h4>
-        <el-table :data="accessLogs" empty-text="暂无访问记录">
-          <el-table-column prop="action" label="动作" width="180" />
-          <el-table-column prop="scope" label="范围" width="120" />
-          <el-table-column prop="ip" label="IP" width="140" />
-          <el-table-column prop="createdAt" label="时间" min-width="160" />
+        <el-table :data="accessLogs" size="small" empty-text="暂无访问记录">
+          <el-table-column label="动作" min-width="130">
+            <template #default="{ row }">{{ actionLabel(row.action) }}</template>
+          </el-table-column>
+          <el-table-column label="范围" width="80">
+            <template #default="{ row }">{{ scopeLabel(row.scope) }}</template>
+          </el-table-column>
+          <el-table-column prop="ip" label="IP" width="130" />
+          <el-table-column prop="createdAt" label="时间" min-width="150" />
         </el-table>
       </template>
     </el-drawer>
@@ -568,7 +606,8 @@ onMounted(async () => {
           end-placeholder="结束日期"
           class="intent-dates"
         />
-        <el-input-number v-model="intent.adults" :min="1" :max="20" />
+        <span class="intent-label">人数</span>
+        <el-input-number v-model="intent.adults" :min="1" :max="20" class="intent-adults" />
         <el-button
           v-if="batchIntents.length > 1"
           text
@@ -706,6 +745,17 @@ onMounted(async () => {
 
 .intent-dates {
   flex: 1;
+}
+
+.intent-label {
+  color: var(--text-secondary, #606266);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.intent-adults {
+  width: 100px;
+  flex: none;
 }
 
 .batch-result {
