@@ -6,14 +6,7 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      redirect: () => (useAuthStore().isLoggedIn ? '/discover' : '/welcome')
-    },
-    {
-      // 营销落地页：复刻参考稿的排版与配色，未登录也可访问
-      path: '/welcome',
-      name: 'welcome',
-      component: () => import('@/views/LandingView.vue'),
-      meta: { public: true, bare: true }
+      redirect: '/discover'
     },
     {
       path: '/login',
