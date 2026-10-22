@@ -212,7 +212,12 @@ onMounted(async () => {
     gap: 0;
   }
   .nav-menu :deep(.el-menu-item span) {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
   .nickname {
     display: none;
