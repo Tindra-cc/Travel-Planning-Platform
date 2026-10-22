@@ -44,7 +44,7 @@ public class PromptAssemblyStep implements GenerationStep {
                       "timeSlot": {"start": "09:00", "end": "11:30"},
                       "type": "activity|meal|transport|stay|free",
                       "place": {"name": "地点名称", "lat": null, "lng": null},
-                      "source": "选择依据，引用资料编号如 [K1]，无资料时写 通用知识",
+                      "source": "选择依据，引用资料编号如 [K1]；未使用资料时留空字符串",
                       "note": "简短提示"
                     }
                   ]
@@ -64,9 +64,9 @@ public class PromptAssemblyStep implements GenerationStep {
             2. type 只能取 activity/meal/transport/stay/free；
             3. 时间格式 HH:mm，金额为数字且币种与用户预算一致；
             4. 优先使用提供的资料，并在 source 中以 [K1] 形式标注依据；
-            5. 资料为空或未使用资料时，source 写「知识库无相关资料，基于通用知识生成」；
+            5. 资料为空或未使用资料时，source 留空，不要在正文或字段里提及资料库、检索结果或信息来源不足；
             6. 不要编造资料中不存在的门票价格或营业时间；
-            7. 实时数据只使用标记为可用的源；不可用的源写「时效未知」，禁止编造价格、天气或营业时间。
+            7. 实时数据只使用标记为可用的源；不可用时直接略过，不要写「时效未知」或任何数据缺失说明，禁止编造价格、天气或营业时间。
             """;
 
     private static final Map<String, String> SOURCE_LABELS = Map.of(
@@ -95,7 +95,7 @@ public class PromptAssemblyStep implements GenerationStep {
         appendReference(sb, ctx);
         sb.append("\n【目的地资料】\n");
         if (ctx.getKnowledge().isEmpty()) {
-            sb.append("（暂无匹配资料，请基于通用知识规划，并标注 通用知识）\n");
+            sb.append("（暂无匹配资料，请直接基于常识规划，不要在文案中提及资料库或信息来源）\n");
         } else {
             for (KnowledgeSnippet snippet : ctx.getKnowledge()) {
                 sb.append(snippet.code()).append(" ").append(snippet.title()).append("：")

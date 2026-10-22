@@ -128,11 +128,7 @@ public class HtmlPackRenderer {
             sb.append("<p class=\"src\">坐标 ").append(String.format("%.5f, %.5f", node.getLat(), node.getLng()))
                     .append("</p>");
         }
-        sb.append("<div class=\"src\">来源：").append(esc(defaultText(node.getSource(), "通用知识")));
-        if (StringUtils.hasText(node.getDataFreshness())) {
-            sb.append(" · 数据时间 ").append(esc(node.getDataFreshness()));
-        }
-        sb.append("</div></div>");
+        sb.append("</div>");
     }
 
     private void appendBudget(StringBuilder sb, BudgetBreakdownDto budget) {

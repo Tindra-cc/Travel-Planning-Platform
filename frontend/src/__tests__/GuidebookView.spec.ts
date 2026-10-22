@@ -218,7 +218,9 @@ describe('GuidebookView', () => {
 
     expect(wrapper.text()).toContain('成都三日')
     expect(wrapper.text()).toContain('宽窄巷子')
-    expect(wrapper.text()).toContain('[K1] 内置资料')
+    // 不再展示节点来源/数据时间说明，只保留可点击的引用条目
+    expect(wrapper.text()).not.toContain('内置资料')
+    expect(wrapper.text()).not.toContain('数据时间')
     expect(wrapper.text()).toContain('[K1] 宽窄巷子')
     expect(wrapper.find('a.citation').attributes('href')).toBe('https://example.com/k1')
     expect(wrapper.text()).toContain('预算拆解')

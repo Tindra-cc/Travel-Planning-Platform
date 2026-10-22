@@ -144,15 +144,10 @@ public class PdfPackRenderer {
         if (StringUtils.hasText(node.getNote())) {
             w.paragraph(node.getNote(), 10f, 0x33, 0x41, 0x55);
         }
-        StringBuilder src = new StringBuilder("来源：")
-                .append(StringUtils.hasText(node.getSource()) ? node.getSource() : "通用知识");
         if (node.getLat() != null && node.getLng() != null) {
-            src.append(" · 坐标 ").append(String.format("%.5f, %.5f", node.getLat(), node.getLng()));
+            w.paragraph("坐标 " + String.format("%.5f, %.5f", node.getLat(), node.getLng()),
+                    8f, 0x94, 0xa3, 0xb8);
         }
-        if (StringUtils.hasText(node.getDataFreshness())) {
-            src.append(" · 数据时间 ").append(node.getDataFreshness());
-        }
-        w.paragraph(src.toString(), 8f, 0x94, 0xa3, 0xb8);
         w.spacer(4f);
     }
 

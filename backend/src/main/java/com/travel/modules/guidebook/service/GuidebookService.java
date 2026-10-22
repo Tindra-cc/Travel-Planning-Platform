@@ -542,8 +542,9 @@ public class GuidebookService {
                 if (StringUtils.hasText(node.getNote())) {
                     sb.append("：").append(node.getNote());
                 }
-                if (StringUtils.hasText(node.getSource())) {
-                    sb.append(" [").append(node.getSource()).append(']');
+                String source = traceableSource(node.getSource());
+                if (source != null) {
+                    sb.append(" [").append(source).append(']');
                 }
                 sb.append('\n');
             }
@@ -623,6 +624,18 @@ public class GuidebookService {
 
     private String text(String value, String fallback) {
         return StringUtils.hasText(value) ? value : fallback;
+    }
+
+    /** 仅保留真实引用标注，通用知识兜底文案不进入导出内容。 */
+    private String traceableSource(String source) {
+        if (!StringUtils.hasText(source)) {
+            return null;
+        }
+        String value = source.strip();
+        if ("通用知识".equals(value) || value.contains("知识库无相关资料")) {
+            return null;
+        }
+        return value;
     }
 
     private String escape(String value) {

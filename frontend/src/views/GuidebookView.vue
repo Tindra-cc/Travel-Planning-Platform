@@ -216,20 +216,16 @@
                       </div>
                     </div>
                     <p v-if="node.note" class="node-note">{{ node.note }}</p>
-                    <div class="node-source">
-                      来源：{{ node.source || '通用知识' }}
-                      <span v-if="node.dataFreshness"> · 数据时间 {{ node.dataFreshness }}</span>
-                    </div>
                     <div v-if="node.openingHours" class="node-source">
                       营业时间：{{ node.openingHours }}
                       <span v-if="node.openingHoursSource">
                         （{{ node.openingHoursSource }}，出行前请核实）
                       </span>
                     </div>
-                    <div v-if="node.citations?.length" class="node-citations">
+                    <div v-if="visibleCitations(node.citations).length" class="node-citations">
                       <component
                         :is="citation.sourceUrl ? 'a' : 'span'"
-                        v-for="(citation, i) in node.citations"
+                        v-for="(citation, i) in visibleCitations(node.citations)"
                         :key="`${citation.code ?? 'general'}-${i}`"
                         :href="citation.sourceUrl ?? undefined"
                         :target="citation.sourceUrl ? '_blank' : undefined"
@@ -872,6 +868,10 @@ function linkIssue(resource: ResourceItem) {
 function citationLabel(citation: Citation) {
   const prefix = citation.code ? `[${citation.code}] ` : ''
   return prefix + (citation.title || citation.sourceName || '引用')
+}
+// 只展示真实知识库引用，通用知识兜底条目不对外呈现
+function visibleCitations(citations?: Citation[] | null) {
+  return (citations ?? []).filter((c) => c.code)
 }
 function tripDestination() {
   const value = detail.value?.intent?.destination
